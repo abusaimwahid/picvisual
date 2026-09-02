@@ -1,0 +1,2 @@
+# Prisma Migrate lock file. Keep provider aligned with schema.prisma.
+provider = "postgresql"

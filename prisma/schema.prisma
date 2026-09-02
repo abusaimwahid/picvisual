@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+enum ProjectStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ServiceStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  REPLIED
+  CLOSED
+}
+
+enum NavigationKind {
+  HEADER
+  FOOTER
+  CUSTOM
+}
+
+enum ProjectMediaRole {
+  GALLERY
+  DETAIL
+  MOTION_STILL
+}
+
+model User {
+  id          String   @id @default(cuid())
+  name        String?
+  email       String   @unique
+  passwordHash String
+  role        Role     @default(EDITOR)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastLoginAt DateTime?
+  auditLogs   AuditLog[]
+  revisions   PageRevision[] @relation("RevisionAuthor")
+}
+
+model Page {
+  id             String       @id @default(cuid())
+  title          String
+  slug           String       @unique
+  pageType       String
+  status         PageStatus   @default(DRAFT)
+  seoTitle       String?
+  seoDescription String?
+  canonicalUrl   String?
+  indexable      Boolean      @default(true)
+  ogImageId      String?
+  ogImage        Media?       @relation("PageOgImage", fields: [ogImageId], references: [id], onDelete: SetNull)
+  publishedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  sections       PageSection[]
+  revisions      PageRevision[]
+  @@index([status])
+}
+
+model PageSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  type      String
+  order     Int
+  enabled   Boolean  @default(true)
+  theme     String?
+  content   Json
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Restrict)
+  @@unique([pageId, order])
+  @@index([pageId, enabled])
+}
+
+model PageRevision {
+  id        String   @id @default(cuid())
+  pageId    String
+  authorId  String?
+  snapshot  Json
+  note      String?
+  createdAt DateTime @default(now())
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Restrict)
+  author    User?    @relation("RevisionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  @@index([pageId, createdAt])
+}
+
+model Media {
+  id               String   @id @default(cuid())
+  filename         String
+  originalFilename String
+  storageProvider  String
+  storageKey       String   @unique
+  publicUrl        String
+  mimeType         String
+  mediaType        MediaType
+  width            Int?
+  height           Int?
+  duration         Float?
+  fileSize         Int?
+  alt              String?
+  caption          String?
+  focalX           Int?     @default(50)
+  focalY           Int?     @default(50)
+  posterMediaId    String?
+  posterMedia      Media?   @relation("VideoPoster", fields: [posterMediaId], references: [id], onDelete: SetNull)
+  videoPosters     Media[]  @relation("VideoPoster")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  pageOgImages     Page[]   @relation("PageOgImage")
+  projectHeroes    Project[] @relation("ProjectHero")
+  projectThumbnails Project[] @relation("ProjectThumbnail")
+  projectBefore    Project[] @relation("ProjectBefore")
+  projectAfter     Project[] @relation("ProjectAfter")
+  projectVideos    Project[] @relation("ProjectVideo")
+  projectVideoPosters Project[] @relation("ProjectVideoPoster")
+  projectOgImages  Project[] @relation("ProjectOgImage")
+  projectMedia     ProjectMedia[]
+  serviceHeroes    Service[] @relation("ServiceHero")
+  serviceThumbnails Service[] @relation("ServiceThumbnail")
+  serviceOgImages  Service[] @relation("ServiceOgImage")
+  testimonialMedia Testimonial[] @relation("TestimonialMedia")
+  clientLogos      Client[] @relation("ClientLogo")
+  settingLogo      SiteSetting[] @relation("SettingLogo")
+  @@index([createdAt])
+  @@index([mediaType])
+}
+
+model Project {
+  id                String        @id @default(cuid())
+  slug              String        @unique
+  title             String
+  category          String
+  summary           String
+  description       String?
+  status            ProjectStatus @default(DRAFT)
+  featured          Boolean       @default(false)
+  featuredOrder     Int?
+  year              Int?
+  clientName        String?
+  services          String[]
+  heroMediaId       String?
+  thumbnailMediaId  String?
+  beforeMediaId     String?
+  afterMediaId      String?
+  videoMediaId      String?
+  videoPosterMediaId String?
+  ogImageId         String?
+  seoTitle          String?
+  seoDescription    String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  publishedAt       DateTime?
+  heroMedia         Media? @relation("ProjectHero", fields: [heroMediaId], references: [id], onDelete: SetNull)
+  thumbnailMedia    Media? @relation("ProjectThumbnail", fields: [thumbnailMediaId], references: [id], onDelete: SetNull)
+  beforeMedia       Media? @relation("ProjectBefore", fields: [beforeMediaId], references: [id], onDelete: SetNull)
+  afterMedia        Media? @relation("ProjectAfter", fields: [afterMediaId], references: [id], onDelete: SetNull)
+  videoMedia        Media? @relation("ProjectVideo", fields: [videoMediaId], references: [id], onDelete: SetNull)
+  videoPosterMedia  Media? @relation("ProjectVideoPoster", fields: [videoPosterMediaId], references: [id], onDelete: SetNull)
+  ogImage           Media? @relation("ProjectOgImage", fields: [ogImageId], references: [id], onDelete: SetNull)
+  media             ProjectMedia[]
+  @@index([status])
+  @@index([featured])
+}
+
+model ProjectMedia {
+  id        String           @id @default(cuid())
+  projectId String
+  mediaId   String
+  order     Int
+  role      ProjectMediaRole @default(GALLERY)
+  caption   String?
+  alt       String?
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  media     Media            @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  @@unique([projectId, mediaId])
+  @@unique([projectId, order])
+}
+
+model Service {
+  id               String        @id @default(cuid())
+  slug             String        @unique
+  title            String
+  category         String
+  shortDescription String
+  description      String?
+  featured         Boolean       @default(false)
+  featuredOrder    Int?
+  status           ServiceStatus @default(DRAFT)
+  heroMediaId      String?
+  thumbnailMediaId String?
+  seoTitle         String?
+  seoDescription   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  heroMedia        Media? @relation("ServiceHero", fields: [heroMediaId], references: [id], onDelete: SetNull)
+  thumbnailMedia   Media? @relation("ServiceThumbnail", fields: [thumbnailMediaId], references: [id], onDelete: SetNull)
+  ogImage          Media? @relation("ServiceOgImage", fields: [ogImageId], references: [id], onDelete: SetNull)
+  ogImageId        String?
+  @@index([status])
+}
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  order     Int
+  enabled   Boolean  @default(true)
+  pageKey   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([pageKey, order])
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  quote     String
+  person    String?
+  role      String?
+  company   String?
+  mediaId   String?
+  order     Int
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  media     Media?   @relation("TestimonialMedia", fields: [mediaId], references: [id], onDelete: SetNull)
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  logoMediaId String?
+  website     String?
+  order       Int
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  logoMedia   Media?   @relation("ClientLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+}
+
+model Navigation {
+  id        String         @id @default(cuid())
+  name      String
+  kind      NavigationKind @unique
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  items     NavigationItem[]
+}
+
+model NavigationItem {
+  id             String     @id @default(cuid())
+  navigationId   String
+  parentId       String?
+  label          String
+  href           String
+  order          Int
+  enabled        Boolean    @default(true)
+  openInNewTab   Boolean    @default(false)
+  navigation     Navigation @relation(fields: [navigationId], references: [id], onDelete: Restrict)
+  parent         NavigationItem? @relation("NavigationTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children       NavigationItem[] @relation("NavigationTree")
+  @@unique([navigationId, order])
+}
+
+model SiteSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  logoMediaId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  logoMedia   Media?   @relation("SettingLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+}
+
+model ContactSubmission {
+  id              String        @id @default(cuid())
+  name            String
+  email           String
+  company         String?
+  projectType     String?
+  estimatedVolume String?
+  timeline        String?
+  budgetRange     String?
+  message         String?
+  status          ContactStatus @default(NEW)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+}

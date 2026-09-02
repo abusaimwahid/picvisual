@@ -1,0 +1,21 @@
+@media(pointer:fine){
+  .pv-pointer-ready [data-cursor],.pv-pointer-ready [data-cursor] *{cursor:none!important}
+  .pv-cursor{background:rgba(255,255,255,.04);backdrop-filter:blur(2px);transition:border-radius .18s,width .18s,height .18s,box-shadow .18s}
+  .pv-cursor b{display:block;position:absolute;inset:-7px;border:1px solid rgba(38,170,225,.45);border-radius:inherit}
+  .pv-cursor[data-mode="image"] i{inset:7px 10px 12px;border-radius:0;clip-path:polygon(50% 0,100% 100%,50% 78%,0 100%)}
+  .pv-cursor[data-mode="image"] b:after{content:"";position:absolute;width:4px;height:4px;border-radius:50%;background:#fff;right:-7px;bottom:-7px}
+  .pv-cursor[data-mode="video"] i{inset:13px;border-radius:50%;background:conic-gradient(#26aae1 0 24%,transparent 24% 100%)}
+  .pv-cursor[data-mode="video"] b:after{content:"";position:absolute;width:1px;height:8px;background:#fff;left:50%;top:-5px}
+  .pv-cursor[data-mode="motion"] i{inset:9px;border-radius:0}
+  .pv-cursor[data-mode="product"] i,.pv-cursor[data-mode="work"] i{display:none}
+  .pv-cursor[data-mode="jewelry"] i{background:radial-gradient(circle,#fff 0 15%,#26aae1 16% 25%,transparent 27%)}
+  .pv-cursor[data-mode="creative"] i{inset:8px 7px 12px;border-radius:0;clip-path:polygon(0 0,100% 50%,40% 60%,25% 100%)}
+  .pv-cursor[data-mode="development"] i{inset:3px;background:#26aae1;border-radius:0}
+  .pv-cursor[data-mode="development"] b{border-radius:50%;inset:auto -8px -5px auto;width:8px;height:8px;background:#fff}
+}
+.pv-work-field header p{font:600 11px var(--display);letter-spacing:.1em;color:#087caf}
+.pv-work-field:after{content:"";position:absolute;z-index:6;width:34vw;height:110%;right:-18vw;top:-5%;background:linear-gradient(90deg,transparent,rgba(38,170,225,.14));pointer-events:none;transform:skewX(-15deg)}
+.pv-retouch-stage:after{content:"";position:absolute;z-index:5;width:22%;height:120%;right:-15%;top:-10%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7));transform:rotate(11deg);pointer-events:none}
+.pv-video-stage:after{content:"";position:absolute;z-index:7;width:32%;height:108%;left:-21%;top:-4%;background:linear-gradient(90deg,#061923,transparent);pointer-events:none}
+.pv-creative-stage:after{content:"";position:absolute;z-index:7;inset:0;border:clamp(12px,2vw,34px) solid rgba(4,26,36,.72);pointer-events:none}
+@media(max-width:800px){.pv-work-field:after,.pv-retouch-stage:after,.pv-video-stage:after,.pv-creative-stage:after{display:none}}

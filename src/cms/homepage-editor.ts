@@ -1,0 +1,8 @@
+import type { SectionType } from "@/cms/types/sections";
+
+export type MediaKind = "IMAGE" | "VIDEO";
+const imageFields = new Set(["primaryMediaId", "secondaryMediaId", "tertiaryMediaId", "mobileMediaId", "posterMediaId", "rawMediaId", "finishedMediaId", "detailMediaIds", "finalFrameMediaId", "sourceMediaId", "cutoutMediaId", "shadowMediaId", "finalMediaId", "campaignMediaId", "macroMediaId", "supportingMediaId", "backgroundMediaId", "subjectMediaId", "lightMediaId", "textureMediaId", "interfaceMediaId", "fragmentMediaId", "screenshotMediaId", "mediaId", "beforeMediaId", "afterMediaId", "detailMediaId", "posterMediaIds"]);
+const videoFields = new Set(["videoMediaId", "mobileVideoMediaId", "reelMediaIds"]);
+export function sectionMediaRequirements(type: SectionType, content: Record<string, unknown>): Array<{ id: string; kind: MediaKind }> { const entries: Array<{ id: string; kind: MediaKind }> = []; for (const [field, raw] of Object.entries(content)) { const kind = videoFields.has(field) ? "VIDEO" : imageFields.has(field) ? "IMAGE" : undefined; if (!kind) continue; for (const id of Array.isArray(raw) ? raw : [raw]) if (typeof id === "string" && id) entries.push({ id, kind }); } if (type === "video") entries.push({ id: String(content.mediaId), kind: "VIDEO" }); return entries; }
+export function hasAllowedMediaKinds(requirements: Array<{ id: string; kind: MediaKind }>, media: Array<{ id: string; mediaType: MediaKind }>) { const mediaById = new Map(media.map((entry) => [entry.id, entry.mediaType])); return requirements.every((requirement) => mediaById.get(requirement.id) === requirement.kind); }
+export const protectedHomepageSectionTypes = new Set(["hero", "positioning", "cta"]);

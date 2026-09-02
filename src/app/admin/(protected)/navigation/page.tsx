@@ -1,0 +1,9 @@
+import { saveNavigationItem } from "@/app/admin/actions";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/admin/AdminPrimitives";
+import { hasDatabaseUrl, prisma } from "@/lib/db/client";
+
+export default async function NavigationAdminPage() {
+  if (!hasDatabaseUrl()) return <section className="admin-content"><PageHeader eyebrow="GLOBAL / NAVIGATION" title="Navigation" description="Navigation falls back to the approved static links during the transition." /><EmptyState title="Database not configured" description="Set DATABASE_URL to manage public navigation." /></section>;
+  const nav = await prisma.navigation.findUnique({ where: { kind: "HEADER" }, include: { items: { orderBy: { order: "asc" } } } });
+  return <section className="admin-content"><PageHeader eyebrow="GLOBAL / NAVIGATION" title="Navigation" description="Only internal paths and HTTPS URLs are accepted. Enabled entries render in both desktop and mobile navigation." /><div className="admin-editor-grid"><form action={saveNavigationItem} className="admin-card admin-content-form"><h2>Add link</h2><label>Label<input name="label" required /></label><label>Target<input name="href" required placeholder="/work or https://…" /></label><input type="hidden" name="enabled" value="false" /><label className="admin-check"><input name="enabled" type="checkbox" value="true" defaultChecked /> Visible</label><button type="submit">Save link</button></form><div className="admin-card"><h2>Header links</h2>{nav?.items.length ? <div className="admin-record-list">{nav.items.map((item) => <article key={item.id}><div><strong>{item.order + 1}. {item.label}</strong><span>{item.href}</span></div><StatusBadge value={item.enabled ? "ACTIVE" : "HIDDEN"} /></article>)}</div> : <EmptyState title="No navigation yet" description="Add a safe navigation entry." />}</div></div></section>;
+}

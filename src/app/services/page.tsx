@@ -1,0 +1,6 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { SiteChrome } from "@/components/layout/SiteChrome";
+import { getPublicServices } from "@/lib/public/readers";
+export const metadata: Metadata = { title: "Services — PicVisual", description: "Image, motion and creative post-production services for modern commercial content teams." };
+export default async function ServicesPage() { const { data: services } = await getPublicServices(); return <SiteChrome><main id="main" className="inner-page"><section className="page-intro"><span className="eyebrow">SERVICES / ONE VISUAL STANDARD</span><h1>Make every<br /><em>output count.</em></h1><p>Flexible post-production for commercial content teams that need polished work without losing the point of the original capture.</p></section><section className="service-page-list">{services.map((service) => <article key={service.title}><div><span>{service.index}</span><h2>{service.title}</h2></div><p>{service.description}</p><ul>{service.items.map((item) => <li key={item}>{item}</li>)}</ul></article>)}</section><section className="inline-cta"><p>Have a brief in hand?</p><Link className="button" href="/contact">Start a Project <i>↗</i></Link></section></main></SiteChrome>; }

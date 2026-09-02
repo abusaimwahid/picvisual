@@ -1,0 +1,2 @@
+import { z } from "zod";
+export const mediaMetadataSchema = z.object({ filename: z.string().min(1).max(255), originalFilename: z.string().min(1).max(255), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/avif", "video/mp4", "video/webm"]), fileSize: z.number().positive().max(200 * 1024 * 1024), focalX: z.number().int().min(0).max(100).optional(), focalY: z.number().int().min(0).max(100).optional() });

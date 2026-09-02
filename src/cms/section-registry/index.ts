@@ -1,0 +1,25 @@
+import type { SectionType } from "@/cms/types/sections";
+export type SectionRegistryEntry = { type: SectionType; label: string; description: string; editor: "form" | "collection" | "media" };
+export const sectionRegistry: SectionRegistryEntry[] = [
+  { type: "hero", label: "Hero scene", description: "Supported headline, CTA and visual-layer content for the homepage hero.", editor: "form" },
+  { type: "positioning", label: "Positioning statement", description: "A sparse editorial statement.", editor: "form" },
+  { type: "capabilities", label: "Capabilities", description: "A selected collection of services.", editor: "collection" },
+  { type: "beforeAfter", label: "Before / after", description: "A validated comparison with optional media references.", editor: "media" },
+  { type: "selectedWork", label: "Selected work", description: "An art-directed selection of projects.", editor: "collection" },
+  { type: "motionShowcase", label: "Motion showcase", description: "A media-led motion capability scene.", editor: "media" },
+  { type: "productionWorkflow", label: "Production workflow", description: "A controlled workflow sequence.", editor: "form" },
+  { type: "whyPicVisual", label: "Why PicVisual", description: "A short set of value statements.", editor: "collection" },
+  { type: "faq", label: "FAQ", description: "An ordered FAQ collection.", editor: "collection" },
+  { type: "cta", label: "CTA", description: "A controlled call-to-action scene.", editor: "form" },
+  { type: "textMedia", label: "Text + media", description: "A layout preset with validated copy and optional media.", editor: "media" },
+  { type: "gallery", label: "Gallery", description: "An ordered gallery with a designed preset.", editor: "media" },
+  { type: "video", label: "Video", description: "A video and optional poster.", editor: "media" },
+  { type: "richText", label: "Rich text", description: "A concise editorial text block.", editor: "form" },
+  { type: "imagePost", label: "Image Post", description: "Raw/finished retouch scene with detail media.", editor: "media" },
+  { type: "videoEdit", label: "Video Edit", description: "Video timeline scene with poster and frames.", editor: "media" },
+  { type: "motion", label: "Motion", description: "Motion/keyframe scene media.", editor: "media" },
+  { type: "product", label: "Product", description: "Product transformation media.", editor: "media" },
+  { type: "jewelry", label: "Jewelry", description: "Jewelry primary and macro media.", editor: "media" },
+  { type: "creative", label: "Creative", description: "Compositing-layer media.", editor: "media" },
+  { type: "development", label: "Development", description: "Interactive interface media.", editor: "media" },
+];

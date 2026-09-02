@@ -1,0 +1,3 @@
+export function PageHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) { return <header className="admin-page-header"><span>{eyebrow}</span><h1>{title}</h1>{description && <p>{description}</p>}</header>; }
+export function EmptyState({ title, description }: { title: string; description: string }) { return <div className="admin-empty"><h2>{title}</h2><p>{description}</p></div>; }
+export function StatusBadge({ value }: { value: string }) { return <span className={`status-badge ${value.toLowerCase().replace(/_/g, "-")}`}>{value.replace(/_/g, " ")}</span>; }
