@@ -7,6 +7,8 @@ export type Project = {
   tone: "sky" | "azure" | "mist" | "navy";
   size: "wide" | "portrait" | "square";
   services: string[];
+  gallery?: Array<{ publicUrl: string; mediaType: "IMAGE" | "VIDEO"; alt: string | null; caption: string | null }>;
+  thumbnail?: { publicUrl: string; alt: string | null; focalX: number | null; focalY: number | null };
 };
 
 // Replace these art-directed placeholder entries with verified PicVisual project media.

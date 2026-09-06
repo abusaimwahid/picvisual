@@ -1,6 +1,7 @@
 import type { SectionType } from "@/cms/types/sections";
-export type SectionRegistryEntry = { type: SectionType; label: string; description: string; editor: "form" | "collection" | "media" };
-export const sectionRegistry: SectionRegistryEntry[] = [
+import { homepageOrderRules, type HomepageOrderRule } from "@/cms/homepage-ordering";
+export type SectionRegistryEntry = { type: SectionType; label: string; description: string; editor: "form" | "collection" | "media"; orderRule: HomepageOrderRule };
+const entries: Array<Omit<SectionRegistryEntry, "orderRule">> = [
   { type: "hero", label: "Hero scene", description: "Supported headline, CTA and visual-layer content for the homepage hero.", editor: "form" },
   { type: "positioning", label: "Positioning statement", description: "A sparse editorial statement.", editor: "form" },
   { type: "capabilities", label: "Capabilities", description: "A selected collection of services.", editor: "collection" },
@@ -23,3 +24,4 @@ export const sectionRegistry: SectionRegistryEntry[] = [
   { type: "creative", label: "Creative", description: "Compositing-layer media.", editor: "media" },
   { type: "development", label: "Development", description: "Interactive interface media.", editor: "media" },
 ];
+export const sectionRegistry: SectionRegistryEntry[] = entries.map((entry) => ({ ...entry, orderRule: homepageOrderRules[entry.type] }));

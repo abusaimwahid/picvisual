@@ -5,6 +5,7 @@ import { projects as fallbackProjects, type Project as PublicProject } from "@/c
 import { site as fallbackSite } from "@/content/site";
 import { mapProjectToPublicProject, mapServiceToPublicService } from "@/lib/adapters/public-content";
 import { hasDatabaseUrl, prisma } from "@/lib/db/client";
+import { HOMEPAGE_PUBLISHED_NOTE, publishedSnapshotToPage, readHomepageSnapshot } from "@/cms/homepage-publication";
 
 export type ReaderResult<T> = { source: "cms" | "fallback"; data: T };
 export type PublicNavigationItem = { label: string; href: string };
@@ -15,12 +16,12 @@ const safeHref = (href: string) => href.startsWith("/") || /^https:\/\//i.test(h
 
 export const getPublicProjects = unstable_cache(async (): Promise<ReaderResult<PublicProject[]>> => {
   if (!hasDatabaseUrl()) return { source: "fallback", data: fallbackProjects };
-  try { const projects = await prisma.project.findMany({ where: { status: "PUBLISHED" }, orderBy: [{ featured: "desc" }, { featuredOrder: "asc" }, { updatedAt: "desc" }] }); return projects.length ? { source: "cms", data: projects.map(mapProjectToPublicProject) } : { source: "fallback", data: fallbackProjects }; } catch { return { source: "fallback", data: fallbackProjects }; }
+  try { const projects = await prisma.project.findMany({ where: { status: "PUBLISHED" }, orderBy: [{ featured: "desc" }, { featuredOrder: "asc" }, { updatedAt: "desc" }], include: { thumbnailMedia: { select: { publicUrl: true, alt: true, focalX: true, focalY: true } } } }); return projects.length ? { source: "cms", data: projects.map(mapProjectToPublicProject) } : { source: "fallback", data: fallbackProjects }; } catch { return { source: "fallback", data: fallbackProjects }; }
 }, ["public-projects-reader"], { tags: ["public-projects"] });
 
 export async function getPublicProjectBySlug(slug: string): Promise<ReaderResult<PublicProject | undefined>> {
   if (!hasDatabaseUrl()) return { source: "fallback", data: fallbackProjects.find((project) => project.slug === slug) };
-  try { const project = await prisma.project.findFirst({ where: { slug, status: "PUBLISHED" } }); return project ? { source: "cms", data: mapProjectToPublicProject(project) } : { source: "fallback", data: fallbackProjects.find((item) => item.slug === slug) }; } catch { return { source: "fallback", data: fallbackProjects.find((project) => project.slug === slug) }; }
+  try { const project = await prisma.project.findFirst({ where: { slug }, include: { thumbnailMedia: { select: { publicUrl: true, alt: true, focalX: true, focalY: true } }, media: { include: { media: { select: { publicUrl: true, mediaType: true, alt: true } } }, orderBy: { order: "asc" } } } }); if (project) return project.status === "PUBLISHED" ? { source: "cms", data: mapProjectToPublicProject(project) } : { source: "cms", data: undefined }; return { source: "fallback", data: fallbackProjects.find((item) => item.slug === slug) }; } catch { return { source: "fallback", data: fallbackProjects.find((project) => project.slug === slug) }; }
 }
 
 export const getPublicServices = unstable_cache(async (): Promise<ReaderResult<PublicService[]>> => {
@@ -47,7 +48,16 @@ export const getPublicSiteSettings = unstable_cache(async (): Promise<ReaderResu
 
 export const getPublicPageContent = unstable_cache(async (slug: string): Promise<ReaderResult<PublicPageContent | undefined>> => {
   if (!hasDatabaseUrl()) return { source: "fallback", data: undefined };
-  try { const page = await prisma.page.findFirst({ where: { slug, status: "PUBLISHED" }, include: { sections: { where: { enabled: true }, orderBy: { order: "asc" } } } }); return page?.sections.length ? { source: "cms", data: { title: page.title, seoTitle: page.seoTitle, seoDescription: page.seoDescription, sections: page.sections.map((section) => ({ type: section.type, content: section.content, order: section.order })) } } : { source: "fallback", data: undefined }; } catch { return { source: "fallback", data: undefined }; }
+  try {
+    const page = await prisma.page.findFirst({ where: { slug, status: "PUBLISHED" }, include: { sections: { where: { enabled: true }, orderBy: { order: "asc" } }, revisions: slug === "home" ? { where: { note: HOMEPAGE_PUBLISHED_NOTE }, orderBy: { createdAt: "desc" }, take: 1 } : false } });
+    if (!page?.sections.length) return { source: "fallback", data: undefined };
+    if (slug === "home") {
+      const snapshot = readHomepageSnapshot(page.revisions[0]?.snapshot);
+      // Until the first draft edit creates a published baseline, retain the approved seeded page.
+      if (snapshot) return { source: "cms", data: publishedSnapshotToPage(snapshot) };
+    }
+    return { source: "cms", data: { title: page.title, seoTitle: page.seoTitle, seoDescription: page.seoDescription, sections: page.sections.map((section) => ({ type: section.type, content: section.content, order: section.order })) } };
+  } catch { return { source: "fallback", data: undefined }; }
 }, ["public-page-reader"], { tags: ["public-pages", "public-studio", "public-contact"] });
 
 export const getPublicHomeContent = unstable_cache(async () => {
@@ -57,3 +67,17 @@ export const getPublicHomeContent = unstable_cache(async () => {
   const media = hasDatabaseUrl() && mediaIds.length ? await prisma.media.findMany({ where: { id: { in: [...new Set(mediaIds)] } }, select: { id: true, publicUrl: true, focalX: true, focalY: true } }).catch(() => []) : [];
   return { source: projects.source === "cms" || services.source === "cms" || faq.source === "cms" || page.source === "cms" ? "cms" as const : "fallback" as const, projects: projects.data, services: services.data, faqs: faq.data, page: page.data, media: Object.fromEntries(media.map((item) => [item.id, item])) };
 }, ["public-home-reader"], { tags: ["public-home", "public-projects", "public-services", "public-faq", "public-pages"] });
+
+/** This is intentionally uncached and is only called by the authenticated admin preview route. */
+export async function getDraftHomeContent() {
+  if (!hasDatabaseUrl()) return getPublicHomeContent();
+  const [projects, services, faq, page] = await Promise.all([
+    getPublicProjects(), getPublicServices(), getPublicFaq(),
+    prisma.page.findUnique({ where: { slug: "home" }, include: { sections: { where: { enabled: true }, orderBy: { order: "asc" } } } }),
+  ]);
+  const sections = page?.sections.map((section) => ({ type: section.type, content: section.content, order: section.order })) ?? [];
+  const collectMediaIds = (value: unknown): string[] => { if (!value || typeof value !== "object") return []; if (Array.isArray(value)) return value.flatMap(collectMediaIds); return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => /MediaId(s)?$/.test(key) ? (Array.isArray(child) ? child.filter((id): id is string => typeof id === "string") : typeof child === "string" ? [child] : []) : collectMediaIds(child)); };
+  const ids = sections.flatMap((section) => collectMediaIds(section.content));
+  const media = ids.length ? await prisma.media.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, publicUrl: true, focalX: true, focalY: true } }).catch(() => []) : [];
+  return { source: "cms" as const, projects: projects.data, services: services.data, faqs: faq.data, page: page ? { title: page.title, seoTitle: page.seoTitle, seoDescription: page.seoDescription, sections } : undefined, media: Object.fromEntries(media.map((item) => [item.id, item])) };
+}
