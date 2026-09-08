@@ -13,3 +13,5 @@ scripts/secret-scan.cjs
 
 .agents
 skills-lock.json
+
+scripts/production-visual.cjs

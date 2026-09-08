@@ -43,3 +43,16 @@
 .services-page .button,.service-end .button{background:#0874a2;border-color:#0874a2;color:#fff;font-size:12px}
 .inline-cta .button{background:#0874a2;border-color:#0874a2;color:#fff;font-size:12px}
 @media(max-width:520px){.hero{height:auto;min-height:100svh;padding-bottom:70px}.hero-actions{flex-direction:column;align-items:flex-start;gap:18px}.hero-actions a{white-space:nowrap}.hero-stage{position:relative;top:auto;right:auto;width:100%;height:360px;margin:55px auto 20px}.hero-foot{bottom:24px}}
+
+/* Keep the hero headline and image planes in separate reading areas. */
+@media(min-width:801px){
+  .hero-copy{max-width:40vw}
+  .hero h1{font-size:clamp(58px,6vw,116px)}
+  .hero-stage{width:43vw;max-width:720px;height:calc(100% - 190px);max-height:770px;top:130px;right:4vw}
+  .hero-actions{gap:20px;flex-wrap:wrap}
+}
+@media(max-width:800px){
+  .hero{height:auto;min-height:100svh;padding-bottom:70px}
+  .hero-stage{position:relative;top:auto;right:auto;bottom:auto;width:100%;height:min(78vw,560px);margin:55px auto 20px}
+  .hero-foot{bottom:24px}
+}
