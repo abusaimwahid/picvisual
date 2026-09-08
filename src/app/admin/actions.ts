@@ -71,7 +71,7 @@ export async function updateUser(formData: FormData) {
   if (actor.id === target.id && !nextActive) redirect("/admin/users?error=self-lockout");
   const result = await prisma.$transaction(async (tx) => {
     // Serialize role changes so simultaneous requests cannot remove the last owner.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(724901)`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(724901)`;
     const fresh = await tx.user.findUniqueOrThrow({ where: { id: target.id } });
     if (fresh.role === "OWNER" && (nextRole !== "OWNER" || !nextActive)) {
       const owners = await tx.user.count({ where: { role: "OWNER", isActive: true } });
@@ -97,7 +97,7 @@ export async function uploadBrandAsset(_previous: BrandActionState, formData: Fo
   try {
     const bytes = new Uint8Array(await file.arrayBuffer()); const validated = validateBrandAsset(kind, { name: file.name, type: file.type, size: file.size, bytes });
     const stored = await getMediaProvider().upload({ filename: file.name, mimeType: validated.mimeType, fileSize: file.size, bytes, mediaType: "IMAGE" });
-    const media = await prisma.media.create({ data: { filename: file.name, originalFilename: file.name, storageProvider: "cloudinary", storageKey: stored.storageKey, publicUrl: stored.publicUrl, mimeType: validated.mimeType, mediaType: "IMAGE", fileSize: file.size } });
+    const media = await prisma.media.create({ data: { filename: file.name, originalFilename: file.name, storageProvider: "cloudinary", storageKey: stored.storageKey, publicUrl: stored.publicUrl, mimeType: validated.mimeType, mediaType: "IMAGE", fileSize: file.size, width: stored.width, height: stored.height } });
     await prisma.siteSetting.upsert({ where: { key: brandSettingKeys[kind] }, update: { logoMediaId: media.id, value: { assetType: kind } }, create: { key: brandSettingKeys[kind], logoMediaId: media.id, value: { assetType: kind } } });
     await audit(actor.id, "BRAND_ASSET_REPLACED", "SiteSetting", brandSettingKeys[kind], { asset: kind, mediaId: media.id });
     revalidateTag("brand-settings");

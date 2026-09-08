@@ -10,8 +10,8 @@ export async function publicSiteUrl() {
 }
 export async function pageMetadata(slug: string, title: string, description: string): Promise<Metadata> {
   const page = (await getPublicPageContent(slug)).data;
-  const base = await publicSiteUrl(); const path = slug === "home" ? "/" : `/${slug}`;
-  return { title: page?.seoTitle || title, description: page?.seoDescription || description, alternates: { canonical: `${base}${path}` }, openGraph: { title: page?.seoTitle || title, description: page?.seoDescription || description, url: `${base}${path}`, type: "website", siteName: "PicVisual" }, twitter: { card: "summary_large_image", title: page?.seoTitle || title, description: page?.seoDescription || description } };
+  const base = await publicSiteUrl(); const image = await defaultSocialImage(); const path = slug === "home" ? "/" : `/${slug}`;
+  return { title: page?.seoTitle || title, description: page?.seoDescription || description, alternates: { canonical: `${base}${path}` }, openGraph: { title: page?.seoTitle || title, description: page?.seoDescription || description, url: `${base}${path}`, type: "website", siteName: "PicVisual", images: [{ url: image }] }, twitter: { card: "summary_large_image", images: [image], title: page?.seoTitle || title, description: page?.seoDescription || description } };
 }
 export async function defaultSocialImage() {
   const settings = (await getPublicSiteSettings()).data;

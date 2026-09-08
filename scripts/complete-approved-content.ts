@@ -66,7 +66,7 @@ async function main() {
       await tx.siteSetting.create({ data: { key: "launch.approved-content.20260906", value: { projectId: project.id, approvedMediaIds: media.map((asset) => asset.id), userApproval: "Approved for public portfolio use" } } });
       await tx.auditLog.create({ data: { action: "APPROVED_CONTENT_PUBLISHED", entityType: "Page", entityId: home.id, metadata: { projectId: project.id } } });
     }
-  }, { timeout: 30000 });
+  }, { timeout: 120000 });
   console.log("Approved content pass completed; original records and history preserved.");
 }
 main().catch((error) => { console.error(error instanceof Error ? error.message.replace(/postgres(?:ql)?:\/\/\S+/g, "[redacted]") : "Content pass failed"); process.exitCode = 1; }).finally(() => db.$disconnect());

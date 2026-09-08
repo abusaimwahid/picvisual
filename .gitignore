@@ -12,3 +12,6 @@ artifacts/
 *.tsbuildinfo
 .vercel/
 .vercel
+
+.agents/
+skills-lock.json

@@ -10,3 +10,6 @@ artifacts
 scripts/*e2e.cjs
 scripts/*audit.cjs
 scripts/secret-scan.cjs
+
+.agents
+skills-lock.json
