@@ -1,0 +1,18 @@
+const {chromium,firefox,webkit,expect}=require('@playwright/test');const fs=require('node:fs');const base='http://localhost:3000';const results=[];
+(async()=>{
+ for(const [name,type] of [['Chrome',chromium],['Firefox',firefox],['WebKit',webkit]]){
+ const browser=await type.launch(name==='Chrome'?{channel:'chrome'}:{});const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ for(const route of ['/','/work','/work/apparel-color-and-texture','/services','/about','/contact','/admin/login']){const r=await page.goto(base+route,{waitUntil:'networkidle'});if(r.status()!==200)throw Error(name+' '+route+' '+r.status());await expect(page.locator('h1')).toBeVisible();}results.push({name:`${name} public routes and login`,status:'PASS',errors});
+ await page.goto(base,{waitUntil:'networkidle'});
+ for(const kind of ['image','video','motion','product','jewelry','creative','development']){
+ const scene=page.locator(`[data-cursor="${kind}"]`);await scene.scrollIntoViewIfNeeded();const rect=await scene.boundingBox();await page.mouse.move(rect.x+rect.width*.7,Math.max(100,Math.min(700,rect.y+rect.height*.5)));
+ await page.waitForTimeout(250);const state=await scene.evaluate(el=>({x:el.style.getPropertyValue('--px'),cursor:document.querySelector('.pv-cursor').dataset.mode}));if(!state.x||state.cursor!==kind)throw Error(`${name} ${kind} pointer response missing`);
+ if(name==='Chrome')await page.screenshot({path:`artifacts/browser/scene-${kind}.png`});
+ }results.push({name:`${name} all seven scene interactions and contextual cursors`,status:'PASS'});
+ const work=page.locator('.pv-work-field');await work.scrollIntoViewIfNeeded();await page.waitForTimeout(500);let start=await work.evaluate(el=>el.getBoundingClientRect().top+scrollY);await page.evaluate(y=>scrollTo(0,y),start+1300);await page.waitForTimeout(1300);await expect(work.getByRole('link',{name:'View project',exact:false}).first()).toHaveAttribute('href','/work/apparel-color-and-texture');if(name==='Chrome')await page.screenshot({path:'artifacts/browser/selected-work-camera.png'});results.push({name:`${name} Selected Work camera and project link`,status:'PASS'});
+ await page.getByRole('button',{name:'What types of work'}).count().catch(()=>0);
+ await page.goto(base+'/contact');await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Open navigation'}).click();await expect(page.locator('.mobile-menu')).toHaveClass(/open/);await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Open navigation'})).toBeFocused();await page.getByRole('button',{name:'Open navigation'}).click();await page.locator('.mobile-menu').getByRole('link',{name:/Services/}).click();await expect(page).toHaveURL(base+'/services');if(await page.evaluate(()=>document.body.style.overflow==='hidden'))throw Error('Menu left scroll locked');results.push({name:`${name} mobile menu, Escape focus and navigation`,status:'PASS'});
+ await page.emulateMedia({reducedMotion:'reduce'});await page.goto(base,{waitUntil:'networkidle'});if(await page.locator('.pin-spacer').count())throw Error('Reduced motion still pins camera');await expect(page.locator('.pv-work-plane').first()).toBeVisible();results.push({name:`${name} reduced motion content`,status:'PASS'});await browser.close();
+ }
+ fs.writeFileSync('artifacts/browser/interactions-e2e.json',JSON.stringify(results,null,2));console.log(JSON.stringify(results));
+})().catch(e=>{fs.writeFileSync('artifacts/browser/interactions-e2e.json',JSON.stringify(results,null,2));console.error('FAIL',e.message);process.exit(1)});

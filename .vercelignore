@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+.env
+.env.local
+.env.*.local
+.local-backups
+artifacts
+*.tsbuildinfo
+scripts/*e2e.cjs
+scripts/*audit.cjs
+scripts/secret-scan.cjs

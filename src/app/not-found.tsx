@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound() { return <main id="main" className="inner-page status-page"><span className="eyebrow">PICVISUAL / 404</span><h1>This page is<br />out of frame.</h1><p>The address may have changed. Explore our work or tell us about your project.</p><div className="hero-actions"><Link className="button" href="/work">View work ↗</Link><Link className="text-link dark" href="/services">Services ↗</Link><Link className="text-link dark" href="/contact">Contact ↗</Link></div></main>; }

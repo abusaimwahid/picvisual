@@ -1,9 +1,12 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { ensureProjectBaseline, ensureServiceBaseline, snapshotJson } from "@/cms/catalog-publication";
+import { cookies, headers } from "next/headers";
+import { navigationInput, settingInput, contactInput, httpsUrlSchema } from "@/lib/validation/site";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { redirect } from "next/navigation";
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { audit } from "@/lib/audit/log";
 import { requireUser } from "@/lib/auth/auth";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/session";
@@ -11,7 +14,7 @@ import { hasDatabaseUrl, prisma } from "@/lib/db/client";
 import { requirePermission } from "@/lib/permissions";
 import { createUserSchema, loginSchema, updateUserSchema } from "@/lib/validation/admin";
 import { brandSettingKeys } from "@/lib/brand/settings";
-import { brandAssetKindSchema, type BrandAssetKind, validateBrandAsset } from "@/lib/media/brand-validation";
+import { getBrandAssetConfig, brandAssetKindSchema, type BrandAssetKind, validateBrandAsset } from "@/lib/media/brand-validation";
 import { getMediaProvider } from "@/lib/media/provider";
 import { normalizeFocalPoint } from "@/lib/media/validation";
 import { createMediaFromFile } from "@/lib/media/upload";
@@ -28,10 +31,13 @@ export type LoginState = { error?: string };
 export type BrandActionState = { error?: string; success?: string };
 
 export async function signIn(_previous: LoginState, formData: FormData): Promise<LoginState> {
-  if (!process.env.DATABASE_URL || !process.env.AUTH_SECRET) return { error: "Admin setup is incomplete. Configure DATABASE_URL and AUTH_SECRET." };
+  if (!process.env.DATABASE_URL || !process.env.AUTH_SECRET) return { error: "Sign-in is temporarily unavailable. Please contact the site owner." };
   const parsed = loginSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
-  const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
+  const identity = parsed.data.email.toLowerCase();
+  const address = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  try { if (!await consumeRateLimit("login-email", identity, 10, 15 * 60_000) || !await consumeRateLimit("login-ip", address, 50, 15 * 60_000)) return { error: "Too many attempts. Please try again in 15 minutes." }; } catch { return { error: "Sign-in is temporarily unavailable. Please try again." }; }
+  const user = await prisma.user.findUnique({ where: { email: identity } });
   if (!user || !user.isActive || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) return { error: "Invalid email or password." };
   const token = await createSessionToken({ userId: user.id, role: user.role });
   const jar = await cookies();
@@ -63,8 +69,18 @@ export async function updateUser(formData: FormData) {
   if (!target) redirect("/admin/users?error=not-found");
   const nextRole = parsed.data.role ?? target.role; const nextActive = parsed.data.isActive ?? target.isActive;
   if (actor.id === target.id && !nextActive) redirect("/admin/users?error=self-lockout");
-  if (target.role === "OWNER" && (nextRole !== "OWNER" || !nextActive)) { const owners = await prisma.user.count({ where: { role: "OWNER", isActive: true } }); if (owners <= 1) redirect("/admin/users?error=last-owner"); }
-  await prisma.user.update({ where: { id: target.id }, data: { role: nextRole, isActive: nextActive } });
+  const result = await prisma.$transaction(async (tx) => {
+    // Serialize role changes so simultaneous requests cannot remove the last owner.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(724901)`;
+    const fresh = await tx.user.findUniqueOrThrow({ where: { id: target.id } });
+    if (fresh.role === "OWNER" && (nextRole !== "OWNER" || !nextActive)) {
+      const owners = await tx.user.count({ where: { role: "OWNER", isActive: true } });
+      if (owners <= 1) return false;
+    }
+    await tx.user.update({ where: { id: target.id }, data: { role: nextRole, isActive: nextActive } });
+    return true;
+  });
+  if (!result) redirect("/admin/users?error=last-owner");
   await audit(actor.id, "USER_UPDATED", "User", target.id, { role: nextRole, isActive: nextActive });
   redirect("/admin/users?success=updated");
 }
@@ -87,6 +103,21 @@ export async function uploadBrandAsset(_previous: BrandActionState, formData: Fo
     revalidateTag("brand-settings");
     return { success: `${assetLabel(kind)} updated.` };
   } catch (error) { return { error: error instanceof Error ? error.message : "The asset could not be uploaded." }; }
+}
+
+export async function selectBrandAsset(_previous: BrandActionState, formData: FormData): Promise<BrandActionState> {
+  const actor = requirePermission(await requireUser(), "manageSettings");
+  const kind = brandAssetKindSchema.safeParse(formData.get("kind"));
+  const id = z.string().cuid().safeParse(formData.get("mediaId"));
+  if (!kind.success || !id.success) return { error: "Choose a brand asset from the library." };
+  const media = await prisma.media.findUnique({ where: { id: id.data } });
+  if (!media || media.mediaType !== "IMAGE") return { error: "Choose an image asset." };
+  const config = getBrandAssetConfig(kind.data);
+  if (!config.types.includes(media.mimeType as never) || !media.fileSize || media.fileSize > config.maxSize) return { error: "This image does not meet the brand format or size requirements shown below." };
+  await prisma.siteSetting.upsert({ where: { key: brandSettingKeys[kind.data] }, update: { logoMediaId: media.id, value: { assetType: kind.data } }, create: { key: brandSettingKeys[kind.data], logoMediaId: media.id, value: { assetType: kind.data } } });
+  await audit(actor.id, "BRAND_ASSET_REPLACED", "SiteSetting", brandSettingKeys[kind.data], { mediaId: media.id });
+  revalidateTag("brand-settings"); revalidatePath("/", "layout");
+  return { success: `${assetLabel(kind.data)} updated.` };
 }
 
 export async function resetBrandAsset(_previous: BrandActionState, formData: FormData): Promise<BrandActionState> {
@@ -114,60 +145,101 @@ async function prepareHomepageDraft(pageId: string, actorId: string) { await pri
 async function recordHomepageDraft(pageId: string, actorId: string) { await prisma.$transaction((tx) => saveHomepageDraftSnapshot(tx, pageId, actorId)); }
 async function validateMediaReferences(references: Array<{ id: string; type: "IMAGE" | "VIDEO" }>) { const expected = references.filter((reference) => reference.id); if (!expected.length) return true; const media = await prisma.media.findMany({ where: { id: { in: [...new Set(expected.map((reference) => reference.id))] } }, select: { id: true, mediaType: true } }); const byId = new Map(media.map((item) => [item.id, item.mediaType])); return expected.every((reference) => byId.get(reference.id) === reference.type); }
 
-export async function saveProject(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = projectInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/projects?error=invalid-project"); const data = parsed.data; if (!await validateMediaReferences([{ id: data.heroMediaId, type: "IMAGE" }, { id: data.thumbnailMediaId, type: "IMAGE" }, { id: data.beforeMediaId, type: "IMAGE" }, { id: data.afterMediaId, type: "IMAGE" }, { id: data.videoMediaId, type: "VIDEO" }, { id: data.videoPosterMediaId, type: "IMAGE" }, { id: data.ogImageId, type: "IMAGE" }])) redirect("/admin/projects?error=invalid-media"); const existing = await prisma.project.findUnique({ where: { slug: data.slug } }); if (existing && existing.id !== data.id) redirect("/admin/projects?error=slug-taken"); const projectData = { title: data.title, slug: data.slug, category: data.category, summary: data.summary, description: data.description || null, services: data.services.split(",").map((item) => item.trim()).filter(Boolean), year: data.year || null, clientName: data.clientName || null, featured: data.featured, featuredOrder: data.featured ? data.featuredOrder ?? 0 : null, heroMediaId: data.heroMediaId || null, thumbnailMediaId: data.thumbnailMediaId || null, beforeMediaId: data.beforeMediaId || null, afterMediaId: data.afterMediaId || null, videoMediaId: data.videoMediaId || null, videoPosterMediaId: data.videoPosterMediaId || null, ogImageId: data.ogImageId || null, seoTitle: data.seoTitle || null, seoDescription: data.seoDescription || null, status: data.status, publishedAt: data.status === "PUBLISHED" ? new Date() : null }; const project = data.id ? await prisma.project.update({ where: { id: data.id }, data: projectData }) : await prisma.project.create({ data: projectData }); await audit(actor.id, data.id ? "PROJECT_UPDATED" : "PROJECT_CREATED", "Project", project.id, { status: project.status }); await invalidate("public-projects", "public-home"); redirect(`/admin/projects/${project.id}?success=saved`); }
+export async function saveProject(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = projectInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/projects?error=invalid-project"); const data = parsed.data; if (!await validateMediaReferences([{ id: data.heroMediaId, type: "IMAGE" }, { id: data.thumbnailMediaId, type: "IMAGE" }, { id: data.beforeMediaId, type: "IMAGE" }, { id: data.afterMediaId, type: "IMAGE" }, { id: data.videoMediaId, type: "VIDEO" }, { id: data.videoPosterMediaId, type: "IMAGE" }, { id: data.ogImageId, type: "IMAGE" }])) redirect("/admin/projects?error=invalid-media");
+  const intent = z.enum(["draft", "publish", "archive"]).catch("draft").parse(formData.get("intent"));
+  const current = data.id ? await prisma.project.findUnique({ where: { id: data.id } }) : null;
+  if (data.id && !current) redirect("/admin/projects?error=not-found");
+  const conflict = await prisma.project.findFirst({ where: { OR: [{ slug: data.slug }, { publishedSlug: data.slug }], ...(data.id ? { id: { not: data.id } } : {}) } });
+  if (conflict) redirect("/admin/projects?error=slug-taken");
+  if (intent === "publish" && current?.publishedSlug && current.publishedSlug !== data.slug && formData.get("confirmSlugChange") !== "true") redirect(`/admin/projects/${current.id}?error=confirm-slug-change`);
+  const record = await prisma.$transaction(async (tx) => {
+    if (current) await ensureProjectBaseline(tx, current.id);
+    const values = { ...{ title: data.title, slug: data.slug, category: data.category, summary: data.summary, description: data.description || null, services: data.services.split(",").map((item) => item.trim()).filter(Boolean), year: data.year || null, clientName: data.clientName || null, featured: data.featured, featuredOrder: data.featured ? data.featuredOrder ?? 0 : null, heroMediaId: data.heroMediaId || null, thumbnailMediaId: data.thumbnailMediaId || null, beforeMediaId: data.beforeMediaId || null, afterMediaId: data.afterMediaId || null, videoMediaId: data.videoMediaId || null, videoPosterMediaId: data.videoPosterMediaId || null, ogImageId: data.ogImageId || null, seoTitle: data.seoTitle || null, seoDescription: data.seoDescription || null, status: "DRAFT" as const }, status: intent === "archive" ? "ARCHIVED" as const : intent === "publish" ? "PUBLISHED" as const : current?.status ?? "DRAFT" as const };
+    const saved = data.id ? await tx.project.update({ where: { id: data.id }, data: values }) : await tx.project.create({ data: values });
+    if (intent === "publish") {
+      const complete = await tx.project.findUniqueOrThrow({ where: { id: saved.id } , include: { media: { orderBy: { order: "asc" } } } });
+      await tx.project.update({ where: { id: saved.id }, data: { publishedSnapshot: snapshotJson(complete) , publishedSlug: complete.slug, publishedAt: new Date() } });
+    }
+    await tx.auditLog.create({ data: { userId: actor.id, action: intent === "publish" ? "PUBLISH" : intent === "archive" ? "ARCHIVE" : "DRAFT_SAVE", entityType: "Project", entityId: saved.id } });
+    return saved;
+  });
+  if (intent !== "draft") await invalidate("public-projects", "public-home");
+  redirect(`/admin/projects/${record.id}?success=${intent === "draft" ? "draft-saved" : intent === "publish" ? "published" : "archived"}`);
+}
 
-export async function saveService(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = serviceInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/services?error=invalid-service"); const data = parsed.data; if (!await validateMediaReferences([{ id: data.heroMediaId, type: "IMAGE" }, { id: data.thumbnailMediaId, type: "IMAGE" }, { id: data.ogImageId, type: "IMAGE" }])) redirect("/admin/services?error=invalid-media"); const existing = await prisma.service.findUnique({ where: { slug: data.slug } }); if (existing && existing.id !== data.id) redirect("/admin/services?error=slug-taken"); const serviceData = { title: data.title, slug: data.slug, category: data.category, shortDescription: data.shortDescription, description: data.description || null, featured: data.featured, featuredOrder: data.featured ? data.featuredOrder ?? 0 : null, heroMediaId: data.heroMediaId || null, thumbnailMediaId: data.thumbnailMediaId || null, ogImageId: data.ogImageId || null, seoTitle: data.seoTitle || null, seoDescription: data.seoDescription || null, status: data.status }; const service = data.id ? await prisma.service.update({ where: { id: data.id }, data: serviceData }) : await prisma.service.create({ data: serviceData }); await audit(actor.id, data.id ? "SERVICE_UPDATED" : "SERVICE_CREATED", "Service", service.id, { status: service.status }); await invalidate("public-services", "public-home"); redirect(`/admin/services/${service.id}?success=saved`); }
+export async function saveService(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = serviceInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/services?error=invalid-service"); const data = parsed.data; if (!await validateMediaReferences([{ id: data.heroMediaId, type: "IMAGE" }, { id: data.thumbnailMediaId, type: "IMAGE" }, { id: data.ogImageId, type: "IMAGE" }])) redirect("/admin/services?error=invalid-media");
+  const intent = z.enum(["draft", "publish", "archive"]).catch("draft").parse(formData.get("intent"));
+  const current = data.id ? await prisma.service.findUnique({ where: { id: data.id } }) : null;
+  if (data.id && !current) redirect("/admin/services?error=not-found");
+  const conflict = await prisma.service.findFirst({ where: { OR: [{ slug: data.slug }], ...(data.id ? { id: { not: data.id } } : {}) } });
+  if (conflict) redirect("/admin/services?error=slug-taken");
 
-export async function saveFaq(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = faqInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/faq?error=invalid-faq"); const data = parsed.data; const faq = data.id ? await prisma.fAQ.update({ where: { id: data.id }, data: { question: data.question, answer: data.answer, enabled: data.enabled } }) : await prisma.fAQ.create({ data: { question: data.question, answer: data.answer, enabled: data.enabled, pageKey: "home", order: await prisma.fAQ.count({ where: { pageKey: "home" } }) } }); await audit(actor.id, data.id ? "FAQ_UPDATED" : "FAQ_CREATED", "FAQ", faq.id); await invalidate("public-faq", "public-home"); redirect("/admin/faq?success=saved"); }
+  const record = await prisma.$transaction(async (tx) => {
+    if (current) await ensureServiceBaseline(tx, current.id);
+    const values = { ...{ title: data.title, slug: data.slug, category: data.category, shortDescription: data.shortDescription, description: data.description || null, featured: data.featured, featuredOrder: data.featured ? data.featuredOrder ?? 0 : null, heroMediaId: data.heroMediaId || null, thumbnailMediaId: data.thumbnailMediaId || null, ogImageId: data.ogImageId || null, seoTitle: data.seoTitle || null, seoDescription: data.seoDescription || null, status: "DRAFT" as const }, status: intent === "archive" ? "ARCHIVED" as const : intent === "publish" ? "PUBLISHED" as const : current?.status ?? "DRAFT" as const };
+    const saved = data.id ? await tx.service.update({ where: { id: data.id }, data: values }) : await tx.service.create({ data: values });
+    if (intent === "publish") {
+      const complete = await tx.service.findUniqueOrThrow({ where: { id: saved.id }  });
+      await tx.service.update({ where: { id: saved.id }, data: { publishedSnapshot: snapshotJson(complete)  } });
+    }
+    await tx.auditLog.create({ data: { userId: actor.id, action: intent === "publish" ? "PUBLISH" : intent === "archive" ? "ARCHIVE" : "DRAFT_SAVE", entityType: "Service", entityId: saved.id } });
+    return saved;
+  });
+  if (intent !== "draft") await invalidate("public-services", "public-home");
+  redirect(`/admin/services?success=${intent === "draft" ? "draft-saved" : intent === "publish" ? "published" : "archived"}&id=${record.id}`);
+}
+
+export async function saveFaq(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = faqInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/faq?error=invalid-faq"); const data = parsed.data; const faq = data.id ? await prisma.fAQ.update({ where: { id: data.id }, data: { question: data.question, answer: data.answer, enabled: data.enabled } }) : await prisma.fAQ.create({ data: { question: data.question, answer: data.answer, enabled: data.enabled, pageKey: "home", order: ((await prisma.fAQ.aggregate({ where: { pageKey: "home" }, _max: { order: true } }))._max.order ?? -1) + 1 } }); await audit(actor.id, data.id ? "FAQ_UPDATED" : "FAQ_CREATED", "FAQ", faq.id); await invalidate("public-faq", "public-home"); redirect("/admin/faq?success=saved"); }
 
 export async function updateEnquiryStatus(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const status = z.enum(["NEW", "IN_PROGRESS", "REPLIED", "CLOSED"]).safeParse(formData.get("status")); if (!id.success || !status.success) redirect("/admin/enquiries?error=invalid-enquiry"); await prisma.contactSubmission.update({ where: { id: id.data }, data: { status: status.data } }); await audit(actor.id, "ENQUIRY_STATUS_UPDATED", "ContactSubmission", id.data, { status: status.data }); redirect("/admin/enquiries?success=saved"); }
 
-const pageInput = z.object({ id: z.string().cuid(), title: z.string().trim().min(2).max(160), status: z.enum(["DRAFT", "PUBLISHED", "HIDDEN"]), seoTitle: z.string().trim().max(160), seoDescription: z.string().trim().max(320), body: z.string().trim().max(4000) });
-const navigationInput = z.object({ id: z.string().cuid().optional(), label: z.string().trim().min(1).max(60), href: z.string().trim().min(1).max(500), enabled: z.enum(["true", "false"]).transform((value) => value === "true") });
-const settingInput = z.object({ siteName: z.string().trim().min(2).max(100), contactEmail: z.string().trim().email().max(200), description: z.string().trim().min(10).max(320) });
-const contactInput = z.object({ name: z.string().trim().min(2).max(120), email: z.string().trim().email().max(200), company: z.string().trim().max(160), projectType: z.string().trim().max(120), estimatedVolume: z.string().trim().max(160), timeline: z.string().trim().max(160), message: z.string().trim().max(4000) });
-
+const pageInput = z.object({ id: z.string().cuid(), title: z.string().trim().min(2).max(160), status: z.enum(["DRAFT", "PUBLISHED", "HIDDEN"]), seoTitle: z.string().trim().max(160), seoDescription: z.string().trim().max(320), body: z.string().trim().max(4000), approachHeading: z.string().trim().max(160).optional().default(""), approachBody: z.string().trim().max(4000).optional().default("") });
 export async function savePage(formData: FormData) {
   const actor = requirePermission(await requireUser(), "editContent"); const parsed = pageInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/pages?error=invalid-page"); const data = parsed.data;
+  const target = await prisma.page.findUnique({ where: { id: data.id } }); if (!target || target.slug === "home") redirect("/admin/homepage");
   const page = await prisma.page.update({ where: { id: data.id }, data: { title: data.title, status: data.status, seoTitle: data.seoTitle || null, seoDescription: data.seoDescription || null, publishedAt: data.status === "PUBLISHED" ? new Date() : null } });
   const existing = await prisma.pageSection.findFirst({ where: { pageId: page.id, type: "richText" }, orderBy: { order: "asc" } });
-  if (data.body) await prisma.pageSection.upsert({ where: { pageId_order: { pageId: page.id, order: existing?.order ?? 0 } }, update: { type: "richText", content: { body: data.body }, enabled: true }, create: { pageId: page.id, type: "richText", order: 0, content: { body: data.body } } });
+  await prisma.pageSection.upsert({ where: { pageId_order: { pageId: page.id, order: existing?.order ?? 0 } }, update: { type: "richText", content: { body: data.body, approachHeading: data.approachHeading, approachBody: data.approachBody }, enabled: true }, create: { pageId: page.id, type: "richText", order: 0, content: { body: data.body, approachHeading: data.approachHeading, approachBody: data.approachBody } } });
   await prisma.pageRevision.create({ data: { pageId: page.id, authorId: actor.id, snapshot: { title: data.title, status: data.status, seoTitle: data.seoTitle, seoDescription: data.seoDescription, body: data.body }, note: "Page editor save" } });
   await audit(actor.id, "PAGE_UPDATED", "Page", page.id, { slug: page.slug, status: page.status }); await invalidate("public-pages", page.slug === "home" ? "public-home" : page.slug === "about" ? "public-studio" : "public-contact"); redirect("/admin/pages?success=saved");
 }
 
 export async function saveNavigationItem(formData: FormData) {
-  const actor = requirePermission(await requireUser(), "editContent"); const parsed = navigationInput.safeParse(Object.fromEntries(formData)); if (!parsed.success || !(/^\//.test(parsed.data.href) || /^https:\/\//i.test(parsed.data.href))) redirect("/admin/navigation?error=invalid-navigation"); const data = parsed.data;
-  const navigation = await prisma.navigation.upsert({ where: { kind: "HEADER" }, update: {}, create: { name: "Header", kind: "HEADER" } });
-  const item = data.id ? await prisma.navigationItem.update({ where: { id: data.id }, data: { label: data.label, href: data.href, enabled: data.enabled } }) : await prisma.navigationItem.create({ data: { navigationId: navigation.id, label: data.label, href: data.href, enabled: data.enabled, order: await prisma.navigationItem.count({ where: { navigationId: navigation.id } }) } });
+  const actor = requirePermission(await requireUser(), "editContent"); const parsed = navigationInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/navigation?error=invalid-navigation"); const data = parsed.data;
+  const navigation = await prisma.navigation.upsert({ where: { kind: data.kind }, update: {}, create: { name: data.kind === "HEADER" ? "Header" : "Footer", kind: data.kind } });
+  const item = data.id ? await prisma.navigationItem.update({ where: { id: data.id }, data: { label: data.label, href: data.href, enabled: data.enabled, openInNewTab: data.openInNewTab } }) : await prisma.navigationItem.create({ data: { navigationId: navigation.id, label: data.label, href: data.href, enabled: data.enabled, openInNewTab: data.openInNewTab, order: await prisma.navigationItem.count({ where: { navigationId: navigation.id } }) } });
   await audit(actor.id, data.id ? "NAVIGATION_UPDATED" : "NAVIGATION_CREATED", "NavigationItem", item.id); await invalidate("public-navigation"); redirect("/admin/navigation?success=saved");
 }
 
 export async function saveSiteSettings(formData: FormData) {
   const actor = requirePermission(await requireUser(), "manageSettings"); const parsed = settingInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/settings?error=invalid-settings");
+  if (parsed.data.ogImageId && !await validateMediaReferences([{ id: parsed.data.ogImageId, type: "IMAGE" }])) redirect("/admin/settings?error=invalid-media");
   await prisma.siteSetting.upsert({ where: { key: "global" }, update: { value: parsed.data }, create: { key: "global", value: parsed.data } }); await audit(actor.id, "SITE_SETTINGS_UPDATED", "SiteSetting", "global"); await invalidate("public-settings"); redirect("/admin/settings?success=saved");
 }
 
 export async function uploadMedia(formData: FormData) {
   const actor = requirePermission(await requireUser(), "editContent"); const file = formData.get("file"); if (!(file instanceof File) || file.size === 0) redirect("/admin/media?error=missing-file");
-  try { const media = await createMediaFromFile({ name: file.name, type: file.type, size: file.size, bytes: new Uint8Array(await file.arrayBuffer()) }); await audit(actor.id, "MEDIA_UPLOADED", "Media", media.id); redirect("/admin/media?success=uploaded"); } catch (error) { const text = error instanceof Error ? error.message : ""; const message = /not configured/i.test(text) ? "storage-not-configured" : /unsupported|signature|SVG|empty|limit/i.test(text) ? "invalid-file" : "storage-unavailable"; redirect(`/admin/media?error=${message}`); }
+  try { const media = await createMediaFromFile({ name: file.name, type: file.type, size: file.size, bytes: new Uint8Array(await file.arrayBuffer()) }); await audit(actor.id, "MEDIA_UPLOADED", "Media", media.id); } catch (error) { const text = error instanceof Error ? error.message : ""; const message = /not configured/i.test(text) ? "storage-not-configured" : /unsupported|signature|SVG|empty|limit/i.test(text) ? "invalid-file" : "storage-unavailable"; redirect(`/admin/media?error=${message}`); }
+  redirect("/admin/media?success=uploaded");
 }
 const mediaUpdateInput = z.object({ id: z.string().cuid(), alt: z.string().trim().max(500).optional().default(""), caption: z.string().trim().max(1000).optional().default(""), focalX: z.coerce.number().optional(), focalY: z.coerce.number().optional() });
 export async function saveMediaMetadata(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = mediaUpdateInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/media?error=invalid-metadata"); const existing = await prisma.media.findUnique({ where: { id: parsed.data.id } }); if (!existing) redirect("/admin/media?error=not-found"); const focalX = existing.mediaType === "IMAGE" && parsed.data.focalX !== undefined ? normalizeFocalPoint(parsed.data.focalX) : existing.focalX; const focalY = existing.mediaType === "IMAGE" && parsed.data.focalY !== undefined ? normalizeFocalPoint(parsed.data.focalY) : existing.focalY; await prisma.media.update({ where: { id: existing.id }, data: { alt: parsed.data.alt || null, caption: parsed.data.caption || null, focalX, focalY } }); await audit(actor.id, focalX !== existing.focalX || focalY !== existing.focalY ? "MEDIA_FOCAL_UPDATED" : "MEDIA_METADATA_UPDATED", "Media", existing.id); await invalidate("public-home", "public-projects", "public-services", "brand-settings"); redirect("/admin/media?success=metadata-saved"); }
 
 export async function submitContactEnquiry(formData: FormData): Promise<{ error?: string; success?: string; mailto?: string }> {
-  const parsed = contactInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please check the form." };
-  const data = parsed.data; if (!hasDatabaseUrl()) return { success: "Email handoff is ready.", mailto: `mailto:hello@picvisual.example?subject=${encodeURIComponent("New PicVisual project enquiry")}&body=${encodeURIComponent(`Name: ${data.name}\nEmail: ${data.email}\nCompany: ${data.company}\n\n${data.message}`)}` };
-  try { await prisma.contactSubmission.create({ data: { name: data.name, email: data.email, company: data.company || null, projectType: data.projectType || null, estimatedVolume: data.estimatedVolume || null, timeline: data.timeline || null, message: data.message || null } }); return { success: "Thanks — your enquiry has been received." }; } catch { return { error: "We could not save your enquiry. Please try again." }; }
-}
-
-export async function saveHomeSection(formData: FormData) {
-  const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const type = z.enum(["hero", "positioning", "cta"]).safeParse(formData.get("type")); if (!id.success || !type.success) redirect("/admin/homepage?error=invalid-section");
-  const enabled = formData.get("enabled") === "true"; let content: unknown;
-  if (type.data === "hero") content = validateSection("hero", { eyebrow: String(formData.get("eyebrow") ?? ""), headline: String(formData.get("headline") ?? ""), description: String(formData.get("description") ?? ""), primaryCta: { label: String(formData.get("primaryLabel") ?? ""), href: String(formData.get("primaryHref") ?? "") }, secondaryCta: { label: String(formData.get("secondaryLabel") ?? ""), href: String(formData.get("secondaryHref") ?? "") } });
-  else if (type.data === "positioning") content = validateSection("positioning", { headline: String(formData.get("headline") ?? ""), body: String(formData.get("body") ?? "") });
-  else content = validateSection("cta", { eyebrow: String(formData.get("eyebrow") ?? ""), heading: String(formData.get("headline") ?? ""), body: String(formData.get("body") ?? ""), cta: { label: String(formData.get("primaryLabel") ?? ""), href: String(formData.get("primaryHref") ?? "") } });
-  const current = await prisma.pageSection.findUnique({ where: { id: id.data } }); if (!current) redirect("/admin/homepage?error=invalid-section"); await prepareHomepageDraft(current.pageId, actor.id); const jsonContent = content as Prisma.InputJsonValue; const section = await prisma.pageSection.update({ where: { id: id.data }, data: { content: jsonContent, enabled } }); await recordHomepageDraft(section.pageId, actor.id); await audit(actor.id, "DRAFT_SAVE", "Page", section.pageId, { section: type.data }); redirect("/admin/homepage?success=draft-saved");
+  if (String(formData.get("website") ?? "")) return { success: "Thanks — your enquiry has been received." };
+  const parsed = contactInput.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please check the form." };
+  const data = parsed.data;
+  if (Date.now() - data.startedAt < 1500 || Date.now() - data.startedAt > 86_400_000) return { error: "Please take a moment to review your enquiry, then try again." };
+  if (!hasDatabaseUrl()) return { error: "Online enquiries are temporarily unavailable. Please email info@picvisual.com." };
+  try {
+    const previous = await prisma.contactSubmission.findUnique({ where: { requestId: data.requestId } });
+    if (previous) return { success: "Thanks — your enquiry has been received." };
+    const address = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+    if (!await consumeRateLimit("contact", address, 8, 60 * 60_000)) return { error: "Please try again later, or email info@picvisual.com." };
+    await prisma.contactSubmission.upsert({ where: { requestId: data.requestId }, update: {}, create: { name: data.name, email: data.email, company: data.company || null, projectType: data.projectType || null, estimatedVolume: data.estimatedVolume || null, timeline: data.timeline || null, message: data.message, projectLink: data.projectLink || null, requestId: data.requestId } });
+    return { success: "Thanks — your enquiry has been received." };
+  } catch { return { error: "We could not save your enquiry. Please try again, or email info@picvisual.com." }; }
 }
 
 const editorSectionType = z.enum(["hero", "positioning", "capabilities", "beforeAfter", "selectedWork", "motionShowcase", "productionWorkflow", "whyPicVisual", "faq", "cta", "textMedia", "gallery", "video", "richText", "imagePost", "videoEdit", "motion", "product", "jewelry", "creative", "development"]);
@@ -188,18 +260,28 @@ export async function saveHomepageBuilderSection(formData: FormData) {
   if (!section || section.type !== type.data || section.pageId !== (await prisma.page.findUnique({ where: { slug: "home" }, select: { id: true } }))?.id) redirect("/admin/homepage?error=invalid-section");
   await prepareHomepageDraft(section.pageId, actor.id);
   const jsonContent = content as Prisma.InputJsonValue;
-  await prisma.pageSection.update({ where: { id: id.data }, data: { content: jsonContent, enabled: formData.get("enabled") === "true" } });
+  await prisma.pageSection.update({ where: { id: id.data }, data: { content: jsonContent, enabled: formData.getAll("enabled").includes("true") } });
   await recordHomepageDraft(section.pageId, actor.id);
   await audit(actor.id, "DRAFT_SAVE", "Page", section.pageId, { section: type.data }); redirect("/admin/homepage?success=draft-saved");
 }
 
-const immersiveType = z.enum(["imagePost", "videoEdit", "motion", "product", "jewelry", "creative", "development"]);
-export async function saveImmersiveHomeSection(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const type = immersiveType.safeParse(formData.get("type")); if (!id.success || !type.success) redirect("/admin/homepage?error=invalid-section"); const media = (name: string) => { const value = String(formData.get(name) ?? ""); return value || undefined; }; const base = { label: String(formData.get("label") ?? ""), heading: String(formData.get("heading") ?? ""), description: String(formData.get("description") ?? ""), primaryMediaId: media("primaryMediaId"), secondaryMediaId: media("secondaryMediaId"), tertiaryMediaId: media("tertiaryMediaId"), mobileMediaId: media("mobileMediaId"), posterMediaId: media("posterMediaId") }; const content = type.data === "imagePost" ? validateSection(type.data, { ...base, rawMediaId: media("rawMediaId"), finishedMediaId: media("finishedMediaId"), detailMediaIds: [] }) : type.data === "videoEdit" ? validateSection(type.data, { ...base, videoMediaId: media("videoMediaId"), timelineMediaIds: [] }) : validateSection(type.data, base); const current = await prisma.pageSection.findUnique({ where: { id: id.data } }); if (!current) redirect("/admin/homepage?error=invalid-section"); await prepareHomepageDraft(current.pageId, actor.id); await prisma.pageSection.update({ where: { id: id.data }, data: { content: content as Prisma.InputJsonValue, enabled: formData.get("enabled") === "true" } }); await recordHomepageDraft(current.pageId, actor.id); await audit(actor.id, "DRAFT_SAVE", "Page", current.pageId, { section: type.data }); redirect("/admin/homepage?success=draft-saved"); }
-
 const homeSectionType = z.enum(["hero", "positioning", "capabilities", "beforeAfter", "selectedWork", "motionShowcase", "productionWorkflow", "whyPicVisual", "faq", "cta", "textMedia", "gallery", "video", "richText", "imagePost", "videoEdit", "motion", "product", "jewelry", "creative", "development"]);
 const homeSectionAction = z.object({ id: z.string().cuid(), direction: z.enum(["up", "down"]).optional() });
 const sectionDefaults: Record<z.infer<typeof homeSectionType>, Prisma.InputJsonValue> = { hero: { eyebrow: "", headline: "New hero", description: "", primaryCta: { label: "Explore", href: "/work" } }, positioning: { headline: "New statement", body: "" }, capabilities: { serviceIds: [] }, beforeAfter: { heading: "Raw / refined" }, selectedWork: { heading: "Selected Work", projectIds: [] }, motionShowcase: { heading: "Motion" }, productionWorkflow: { heading: "Workflow", steps: [{ title: "Send", description: "" }, { title: "Finish", description: "" }] }, whyPicVisual: { heading: "Why PicVisual", items: [] }, faq: { heading: "FAQ", faqIds: [] }, cta: { eyebrow: "Start", heading: "New CTA", body: "", cta: { label: "Contact", href: "/contact" } }, textMedia: { heading: "New section", body: "", preset: "editorial" }, gallery: { mediaIds: [], preset: "editorial-collage" }, video: { mediaId: "" }, richText: { body: "" }, imagePost: { label: "IMAGE POST", heading: "New image post", description: "", detailMediaIds: [] }, videoEdit: { label: "VIDEO EDIT", heading: "New video edit", description: "", timelineMediaIds: [] }, motion: { label: "MOTION", heading: "New motion scene", description: "" }, product: { label: "PRODUCT", heading: "New product scene", description: "" }, jewelry: { label: "JEWELRY", heading: "New jewelry scene", description: "" }, creative: { label: "CREATIVE", heading: "New creative scene", description: "" }, development: { label: "INTERACTIVE", heading: "New interactive scene", description: "" } };
-export async function addHomeSection(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const type = homeSectionType.safeParse(formData.get("type")); if (!type.success) redirect("/admin/homepage?error=invalid-section-type"); const page = await prisma.page.findUnique({ where: { slug: "home" } }); if (!page) redirect("/admin/homepage?error=missing-home"); await prepareHomepageDraft(page.id, actor.id); const order = await prisma.pageSection.count({ where: { pageId: page.id } }); const section = await prisma.pageSection.create({ data: { pageId: page.id, type: type.data, order, content: sectionDefaults[type.data] } }); await recordHomepageDraft(page.id, actor.id); await audit(actor.id, "DRAFT_SAVE", "Page", page.id, { section: type.data }); redirect("/admin/homepage?success=draft-saved"); }
+export async function addHomeSection(formData: FormData) {
+  const actor = requirePermission(await requireUser(), "editContent"); const type = homeSectionType.safeParse(formData.get("type")); if (!type.success) redirect("/admin/homepage?error=invalid-section-type");
+  const page = await prisma.page.findUnique({ where: { slug: "home" }, include: { sections: { orderBy: { order: "asc" } } } }); if (!page) redirect("/admin/homepage?error=missing-home");
+  const repeatable = ["textMedia", "richText", "gallery", "video", "productionWorkflow", "whyPicVisual", "faq"];
+  if (!repeatable.includes(type.data) && page.sections.some((section) => section.type === type.data)) redirect("/admin/homepage?error=section-already-exists");
+  await prisma.$transaction(async (tx) => {
+    await ensureHomepagePublishedBaseline(tx, page.id, actor.id);
+    const cta = page.sections.find((section) => section.type === "cta"); const order = cta?.order ?? page.sections.length;
+    if (cta) await tx.pageSection.update({ where: { id: cta.id }, data: { order: order + 1 } });
+    await tx.pageSection.create({ data: { pageId: page.id, type: type.data, order, enabled: false, content: sectionDefaults[type.data] } });
+    await saveHomepageDraftSnapshot(tx, page.id, actor.id);
+  });
+  await audit(actor.id, "DRAFT_SAVE", "Page", page.id, { section: type.data }); redirect("/admin/homepage?success=draft-saved");
+}
 export async function duplicateHomeSection(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = homeSectionAction.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/homepage?error=invalid-section"); const source = await prisma.pageSection.findUnique({ where: { id: parsed.data.id } }); if (!source) redirect("/admin/homepage?error=not-found"); await prepareHomepageDraft(source.pageId, actor.id); await prisma.$transaction(async (tx) => { const following = await tx.pageSection.findMany({ where: { pageId: source.pageId, order: { gt: source.order } }, orderBy: { order: "desc" }, select: { id: true, order: true } }); await tx.pageSection.update({ where: { id: source.id }, data: { order: -1 } }); for (const section of following) await tx.pageSection.update({ where: { id: section.id }, data: { order: section.order + 1 } }); await tx.pageSection.update({ where: { id: source.id }, data: { order: source.order } }); await tx.pageSection.create({ data: { pageId: source.pageId, type: source.type, order: source.order + 1, enabled: false, theme: source.theme, content: source.content as Prisma.InputJsonValue, settings: source.settings === null ? Prisma.JsonNull : source.settings as Prisma.InputJsonValue } }); }); await recordHomepageDraft(source.pageId, actor.id); await audit(actor.id, "DRAFT_SAVE", "Page", source.pageId, { section: source.type }); redirect("/admin/homepage?success=draft-saved"); }
 export async function deleteHomeSection(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = homeSectionAction.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/homepage?error=invalid-section"); const section = await prisma.pageSection.findUnique({ where: { id: parsed.data.id } }); if (!section || protectedHomepageSectionTypes.has(section.type)) redirect("/admin/homepage?error=protected-section"); await prepareHomepageDraft(section.pageId, actor.id); await prisma.$transaction(async (tx) => { await tx.pageSection.delete({ where: { id: section.id } }); await tx.pageSection.updateMany({ where: { pageId: section.pageId, order: { gt: section.order } }, data: { order: { decrement: 1 } } }); }); await recordHomepageDraft(section.pageId, actor.id); await audit(actor.id, "DRAFT_SAVE", "Page", section.pageId, { section: section.type }); redirect("/admin/homepage?success=draft-saved"); }
 async function normalizeHomeSectionOrders(tx: Prisma.TransactionClient, pageId: string) { const sections = await tx.pageSection.findMany({ where: { pageId }, orderBy: { order: "asc" }, select: { id: true, order: true } }); if (sections.every((section, index) => section.order === index)) return; for (const [index, section] of sections.entries()) await tx.pageSection.update({ where: { id: section.id }, data: { order: -10_000 - index } }); for (const [index, section] of sections.entries()) await tx.pageSection.update({ where: { id: section.id }, data: { order: index } }); }
@@ -242,12 +324,23 @@ export async function restoreHomepageRevision(formData: FormData) {
 }
 
 const galleryInput = z.object({ projectId: z.string().cuid(), mediaId: z.string().cuid(), role: z.enum(["GALLERY", "DETAIL", "MOTION_STILL"]), caption: z.string().trim().max(500).optional().default(""), alt: z.string().trim().max(500).optional().default("") });
-export async function addProjectGalleryItem(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = galleryInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/projects?error=invalid-gallery"); const data = parsed.data; const exists = await prisma.projectMedia.findUnique({ where: { projectId_mediaId: { projectId: data.projectId, mediaId: data.mediaId } } }); if (exists) redirect(`/admin/projects/${data.projectId}?error=gallery-duplicate`); await prisma.projectMedia.create({ data: { projectId: data.projectId, mediaId: data.mediaId, role: data.role, caption: data.caption || null, alt: data.alt || null, order: await prisma.projectMedia.count({ where: { projectId: data.projectId } }) } }); await audit(actor.id, "PROJECT_GALLERY_ADDED", "Project", data.projectId); await invalidate("public-projects"); redirect(`/admin/projects/${data.projectId}?success=gallery-added`); }
-export async function removeProjectGalleryItem(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const projectId = z.string().cuid().safeParse(formData.get("projectId")); if (!id.success || !projectId.success) redirect("/admin/projects?error=invalid-gallery"); const item = await prisma.projectMedia.findUnique({ where: { id: id.data } }); if (!item || item.projectId !== projectId.data) redirect("/admin/projects?error=invalid-gallery"); await prisma.projectMedia.delete({ where: { id: item.id } }); await audit(actor.id, "PROJECT_GALLERY_REMOVED", "Project", projectId.data); await invalidate("public-projects"); redirect(`/admin/projects/${projectId.data}?success=gallery-removed`); }
-export async function moveProjectGalleryItem(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const projectId = z.string().cuid().safeParse(formData.get("projectId")); const direction = z.enum(["up", "down"]).safeParse(formData.get("direction")); if (!id.success || !projectId.success || !direction.success) redirect("/admin/projects?error=invalid-gallery"); const current = await prisma.projectMedia.findUnique({ where: { id: id.data } }); if (!current || current.projectId !== projectId.data) redirect("/admin/projects?error=invalid-gallery"); const sibling = await prisma.projectMedia.findFirst({ where: { projectId: current.projectId, order: direction.data === "up" ? { lt: current.order } : { gt: current.order } }, orderBy: { order: direction.data === "up" ? "desc" : "asc" } }); if (!sibling) redirect(`/admin/projects/${projectId.data}?error=gallery-boundary`); await prisma.$transaction(async (tx) => { await tx.projectMedia.update({ where: { id: current.id }, data: { order: -1 } }); await tx.projectMedia.update({ where: { id: sibling.id }, data: { order: current.order } }); await tx.projectMedia.update({ where: { id: current.id }, data: { order: sibling.order } }); }); await audit(actor.id, "PROJECT_GALLERY_REORDERED", "Project", current.projectId, { direction: direction.data, mediaId: current.mediaId }); await invalidate("public-projects"); redirect(`/admin/projects/${projectId.data}?success=gallery-reordered`); }
+export async function addProjectGalleryItem(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = galleryInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/projects?error=invalid-gallery"); const data = parsed.data; const exists = await prisma.projectMedia.findUnique({ where: { projectId_mediaId: { projectId: data.projectId, mediaId: data.mediaId } } }); if (exists) redirect(`/admin/projects/${data.projectId}?error=gallery-duplicate`); await prisma.$transaction(async (tx) => { await ensureProjectBaseline(tx, data.projectId); await tx.projectMedia.create({ data: { projectId: data.projectId, mediaId: data.mediaId, role: data.role, caption: data.caption || null, alt: data.alt || null, order: ((await tx.projectMedia.aggregate({ where: { projectId: data.projectId }, _max: { order: true } }))._max.order ?? -1) + 1 } }); }); await audit(actor.id, "PROJECT_GALLERY_ADDED", "Project", data.projectId); redirect(`/admin/projects/${data.projectId}?success=gallery-added`); }
+export async function saveProjectGalleryItem(formData: FormData) {
+  const actor = requirePermission(await requireUser(), "editContent");
+  const parsed = galleryInput.omit({mediaId:true}).extend({id:z.string().cuid()}).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/admin/projects?error=invalid-gallery");
+  const {id, projectId, role, caption, alt} = parsed.data;
+  const item = await prisma.projectMedia.findUnique({where:{id}});
+  if (!item || item.projectId !== projectId) redirect("/admin/projects?error=invalid-gallery");
+  await prisma.$transaction(async tx => { await ensureProjectBaseline(tx, projectId); await tx.projectMedia.update({where:{id},data:{role,caption:caption||null,alt:alt||null}}); });
+  await audit(actor.id,"PROJECT_GALLERY_UPDATED","Project",projectId);
+  redirect(`/admin/projects/${projectId}?success=gallery-saved`);
+}
+export async function removeProjectGalleryItem(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const projectId = z.string().cuid().safeParse(formData.get("projectId")); if (!id.success || !projectId.success) redirect("/admin/projects?error=invalid-gallery"); const item = await prisma.projectMedia.findUnique({ where: { id: id.data } }); if (!item || item.projectId !== projectId.data) redirect("/admin/projects?error=invalid-gallery"); await prisma.$transaction(async (tx) => { await ensureProjectBaseline(tx, projectId.data); await tx.projectMedia.delete({ where: { id: item.id } }); }); await audit(actor.id, "PROJECT_GALLERY_REMOVED", "Project", projectId.data); redirect(`/admin/projects/${projectId.data}?success=gallery-removed`); }
+export async function moveProjectGalleryItem(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); const projectId = z.string().cuid().safeParse(formData.get("projectId")); const direction = z.enum(["up", "down"]).safeParse(formData.get("direction")); if (!id.success || !projectId.success || !direction.success) redirect("/admin/projects?error=invalid-gallery"); const current = await prisma.projectMedia.findUnique({ where: { id: id.data } }); if (!current || current.projectId !== projectId.data) redirect("/admin/projects?error=invalid-gallery"); const sibling = await prisma.projectMedia.findFirst({ where: { projectId: current.projectId, order: direction.data === "up" ? { lt: current.order } : { gt: current.order } }, orderBy: { order: direction.data === "up" ? "desc" : "asc" } }); if (!sibling) redirect(`/admin/projects/${projectId.data}?error=gallery-boundary`); await prisma.$transaction(async (tx) => { await ensureProjectBaseline(tx, projectId.data); await tx.projectMedia.update({ where: { id: current.id }, data: { order: -1 } }); await tx.projectMedia.update({ where: { id: sibling.id }, data: { order: current.order } }); await tx.projectMedia.update({ where: { id: current.id }, data: { order: sibling.order } }); }); await audit(actor.id, "PROJECT_GALLERY_REORDERED", "Project", current.projectId, { direction: direction.data, mediaId: current.mediaId }); redirect(`/admin/projects/${projectId.data}?success=gallery-reordered`); }
 
 const testimonialInput = z.object({ id: z.string().cuid().optional(), quote: z.string().trim().min(5).max(3000), person: z.string().trim().max(120), role: z.string().trim().max(120), company: z.string().trim().max(120), mediaId: z.string().cuid().optional().or(z.literal("")), enabled: z.enum(["true", "false"]).transform((value) => value === "true") });
-const clientInput = z.object({ id: z.string().cuid().optional(), name: z.string().trim().min(2).max(160), website: z.string().trim().url().optional().or(z.literal("")), logoMediaId: z.string().cuid().optional().or(z.literal("")), enabled: z.enum(["true", "false"]).transform((value) => value === "true") });
+const clientInput = z.object({ id: z.string().cuid().optional(), name: z.string().trim().min(2).max(160), website: httpsUrlSchema.optional().or(z.literal("")), logoMediaId: z.string().cuid().optional().or(z.literal("")), enabled: z.enum(["true", "false"]).transform((value) => value === "true") });
 const orderInput = z.object({ id: z.string().cuid(), direction: z.enum(["up", "down"]) });
 
 async function swapFaqOrder(id: string, direction: "up" | "down") {
@@ -268,3 +361,52 @@ export async function deleteClient(formData: FormData) { const actor = requirePe
 export async function moveClient(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const parsed = orderInput.safeParse(Object.fromEntries(formData)); if (!parsed.success) redirect("/admin/clients?error=invalid-order"); const current = await prisma.client.findUnique({ where: { id: parsed.data.id } }); if (!current) redirect("/admin/clients?error=not-found"); const sibling = await prisma.client.findFirst({ where: { order: parsed.data.direction === "up" ? { lt: current.order } : { gt: current.order } }, orderBy: { order: parsed.data.direction === "up" ? "desc" : "asc" } }); if (!sibling) redirect("/admin/clients?error=order-boundary"); await prisma.$transaction(async (tx) => { await tx.client.update({ where: { id: current.id }, data: { order: -1 } }); await tx.client.update({ where: { id: sibling.id }, data: { order: current.order } }); await tx.client.update({ where: { id: current.id }, data: { order: sibling.order } }); }); await audit(actor.id, "CLIENT_REORDERED", "Client", current.id, { direction: parsed.data.direction }); await invalidate("public-clients", "public-home"); redirect("/admin/clients?success=reordered"); }
 
 export async function deleteMediaIfUnused(formData: FormData) { const actor = requirePermission(await requireUser(), "editContent"); const id = z.string().cuid().safeParse(formData.get("id")); if (!id.success) redirect("/admin/media?error=invalid-media"); const result = await getMediaUsage(id.data); if (!result) redirect("/admin/media?error=not-found"); if (result.referenceCount) redirect("/admin/media?error=in-use"); try { await getMediaProvider().delete(result.media.storageKey, result.media.mediaType); } catch { redirect("/admin/media?error=provider-delete-failed"); } await prisma.media.delete({ where: { id: result.media.id } }); await audit(actor.id, "MEDIA_DELETED", "Media", result.media.id); await invalidate("public-home", "public-projects", "public-services", "brand-settings"); redirect("/admin/media?success=deleted"); }
+
+export async function changePassword(_previous: LoginState, formData: FormData): Promise<LoginState> {
+  const user = await requireUser();
+  const current = String(formData.get("currentPassword") ?? "");
+  const password = z.string().min(12, "Use at least 12 characters.").max(72).safeParse(formData.get("password"));
+  if (!password.success) return { error: "Use a new password between 12 and 72 characters." };
+  if (password.data !== formData.get("confirmPassword")) return { error: "The new passwords do not match." };
+  if (!await consumeRateLimit("password-change", user.id, 8, 15 * 60_000)) return { error: "Please try again in 15 minutes." };
+  const stored = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+  if (!await bcrypt.compare(current, stored.passwordHash)) return { error: "The current password is incorrect." };
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(password.data, 12), passwordChangedAt: new Date(Math.floor(Date.now() / 1000) * 1000 + 1000) } });
+    await tx.auditLog.create({ data: { userId: user.id, action: "PASSWORD_CHANGED", entityType: "User", entityId: user.id } });
+  });
+  (await cookies()).delete(SESSION_COOKIE);
+  redirect("/admin/login?success=password-changed");
+}
+
+export async function saveEnquiry(formData: FormData) {
+  const actor = requirePermission(await requireUser(), "editContent");
+  const parsed = z.object({ id: z.string().cuid(), status: z.enum(["NEW", "IN_PROGRESS", "REPLIED", "CLOSED"]), internalNotes: z.string().trim().max(8000), archive: z.enum(["true", "false"]).default("false") }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/admin/enquiries?error=invalid-enquiry");
+  const { id, status, internalNotes, archive } = parsed.data;
+  await prisma.$transaction(async (tx) => {
+    await tx.contactSubmission.update({ where: { id }, data: { status, internalNotes: internalNotes || null, archivedAt: archive === "true" ? new Date() : null } });
+    await tx.auditLog.create({ data: { userId: actor.id, action: archive === "true" ? "ENQUIRY_ARCHIVED" : "ENQUIRY_UPDATED", entityType: "ContactSubmission", entityId: id, metadata: { status } } });
+  });
+  redirect(`/admin/enquiries/${id}?success=saved`);
+}
+
+export async function moveNavigationItem(formData: FormData) {
+  const actor = requirePermission(await requireUser(), "editContent"); const parsed = orderInput.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/admin/navigation?error=invalid-order");
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.navigationItem.findUniqueOrThrow({ where: { id: parsed.data.id } });
+    const sibling = await tx.navigationItem.findFirst({ where: { navigationId: current.navigationId, order: parsed.data.direction === "up" ? { lt: current.order } : { gt: current.order } }, orderBy: { order: parsed.data.direction === "up" ? "desc" : "asc" } });
+    if (!sibling) return;
+    await tx.navigationItem.update({ where: { id: current.id }, data: { order: -1 } });
+    await tx.navigationItem.update({ where: { id: sibling.id }, data: { order: current.order } });
+    await tx.navigationItem.update({ where: { id: current.id }, data: { order: sibling.order } });
+    await tx.auditLog.create({ data: { userId: actor.id, action: "NAVIGATION_REORDERED", entityType: "NavigationItem", entityId: current.id } });
+  });
+  await invalidate("public-navigation"); redirect("/admin/navigation?success=reordered");
+}
+
+export async function publishProject(formData: FormData) { formData.set("intent", "publish"); return saveProject(formData); }
+export async function archiveProject(formData: FormData) { formData.set("intent", "archive"); return saveProject(formData); }
+export async function publishService(formData: FormData) { formData.set("intent", "publish"); return saveService(formData); }
+export async function archiveService(formData: FormData) { formData.set("intent", "archive"); return saveService(formData); }

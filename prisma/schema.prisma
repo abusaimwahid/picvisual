@@ -65,6 +65,7 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   lastLoginAt DateTime?
+  passwordChangedAt DateTime?
   auditLogs   AuditLog[]
   revisions   PageRevision[] @relation("RevisionAuthor")
 }
@@ -160,6 +161,8 @@ model Media {
 
 model Project {
   id                String        @id @default(cuid())
+  publishedSlug     String?       @unique
+  publishedSnapshot Json?
   slug              String        @unique
   title             String
   category          String
@@ -210,6 +213,7 @@ model ProjectMedia {
 }
 
 model Service {
+  publishedSnapshot Json?
   id               String        @id @default(cuid())
   slug             String        @unique
   title            String
@@ -313,6 +317,10 @@ model ContactSubmission {
   estimatedVolume String?
   timeline        String?
   budgetRange     String?
+  projectLink     String?
+  internalNotes   String?
+  archivedAt      DateTime?
+  requestId       String?       @unique
   message         String?
   status          ContactStatus @default(NEW)
   createdAt       DateTime      @default(now())
@@ -330,4 +338,11 @@ model AuditLog {
   createdAt  DateTime @default(now())
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   @@index([createdAt])
+}
+
+model RateLimit {
+  key String @id
+  count Int @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
 }

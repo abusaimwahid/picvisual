@@ -15,8 +15,12 @@ const matches = (bytes: Uint8Array, expected: number[]) => bytes.length >= expec
 const extension = (filename: string) => filename.split(".").pop()?.toLowerCase() ?? "";
 
 export function validateSvg(svg: string) {
-  if (!/<svg[\s>]/i.test(svg)) throw new Error("The SVG file is not valid.");
-  if (/<\s*(script|foreignObject|iframe|object|embed|audio|video)\b/i.test(svg) || /\bon\w+\s*=/i.test(svg) || /(?:href|xlink:href)\s*=\s*["']\s*(?:javascript:|https?:|\/\/)/i.test(svg) || /@import|url\s*\(\s*["']?\s*(?:https?:|\/\/)/i.test(svg)) throw new Error("The SVG contains unsafe active or remote content.");
+  if (!/<svg[\s>]/i.test(svg) || !/<\/svg\s*>/i.test(svg)) throw new Error("The SVG file is not valid.");
+  // Accept static local vector artwork; reject active XML, CSS, animation and external references.
+  if (/<\s*(?:script|foreignObject|iframe|object|embed|audio|video|style|animate\w*|set|a)\b/i.test(svg) || /<!DOCTYPE|<!ENTITY|<\?(?!xml\s)|\bon\w+\s*=|\bxml:base\s*=|@import|expression\s*\(/i.test(svg)) throw new Error("The SVG contains unsafe active content.");
+  for (const match of svg.matchAll(/(?:href|xlink:href)\s*=\s*(["'])(.*?)\1/gi)) if (!/^#[a-zA-Z_][\w:.-]*$/.test(match[2])) throw new Error("The SVG contains unsafe references.");
+  for (const match of svg.matchAll(/url\s*\((.*?)\)/gi)) if (!/^["']?#[a-zA-Z_][\w:.-]*["']?$/.test(match[1].trim())) throw new Error("The SVG contains unsafe URLs.");
+  if (/&#|\\|\b(?:href|xlink:href)\s*=\s*[^"'\s]/i.test(svg)) throw new Error("The SVG contains unsafe encoded content.");
 }
 
 function hasExpectedSignature(mimeType: (typeof supportedMimeTypes)[number], bytes: Uint8Array) {

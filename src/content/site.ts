@@ -8,5 +8,5 @@ export const site = {
     { label: "Studio", href: "/about" },
     { label: "Contact", href: "/contact" },
   ],
-  email: "hello@picvisual.example",
+  email: "info@picvisual.com",
 } as const;

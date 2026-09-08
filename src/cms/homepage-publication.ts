@@ -58,7 +58,9 @@ export async function validateHomepageSnapshot(db: HomepageDb, snapshot: Homepag
   const required = ["hero", "positioning", "cta"];
   if (required.some((type) => !sections.some((section) => section.type === type && section.enabled))) return "Hero, positioning, and call-to-action sections must remain visible.";
   if (sections.find((section) => section.type === "hero")?.order !== 0 || sections.find((section) => section.type === "cta")?.order !== sections.length - 1) return "Hero must be first and the call-to-action must be last.";
-  for (const section of sections) {
+  const singletons = ["hero", "positioning", "capabilities", "beforeAfter", "selectedWork", "motionShowcase", "cta", "imagePost", "videoEdit", "motion", "product", "jewelry", "creative", "development"];
+  if (singletons.some((type) => sections.filter((section) => section.type === type && section.enabled).length > 1)) return "Only one visible section of each fixed scene type is supported.";
+  for (const section of sections.filter((section) => section.enabled)) {
     if (!(section.type in sectionSchemas)) return `Unknown section type: ${section.type}.`;
     try { validateSection(section.type as SectionType, section.content); } catch { return `The ${section.type} section has invalid content.`; }
   }

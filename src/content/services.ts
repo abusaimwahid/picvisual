@@ -1,4 +1,10 @@
 export type Service = {
+  id?: string;
+  slug?: string;
+  featured?: boolean;
+  hero?: import("./work").PublicAsset;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   title: string;
   shortTitle: string;
   description: string;
@@ -25,7 +31,7 @@ export const services: Service[] = [
     index: "03",
     title: "Creative production",
     shortTitle: "Creative production",
-    description: "An elevated finishing layer for the visual moments that call for more than a standard post-production workflow.",
+    description: "Creative compositing and image adaptation for campaigns that need a considered visual finish.",
     items: ["Creative compositing", "Product manipulation", "Campaign adaptations", "AI-assisted production"],
   },
 ];

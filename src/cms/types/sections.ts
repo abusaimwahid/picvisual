@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { isSafeHref } from "@/lib/validation/site";
 
 const mediaId = z.string().cuid().optional();
 const copy = z.string().trim();
-const cta = z.object({ label: copy.max(40), href: copy.max(200).refine((href) => href.startsWith("/") || /^https:\/\//i.test(href), "Use an internal path or HTTPS URL.") });
+const cta = z.object({ label: copy.max(40), href: copy.max(200).refine(isSafeHref, "Use an internal path or HTTPS URL.") });
 const immersiveSceneSchema = z.object({ label: copy.max(70), heading: copy.max(140), description: copy.max(500), primaryMediaId: mediaId, secondaryMediaId: mediaId, tertiaryMediaId: mediaId, mobileMediaId: mediaId, posterMediaId: mediaId });
 const item = z.object({ title: copy.max(80), description: copy.max(300), enabled: z.boolean().default(true) });
 

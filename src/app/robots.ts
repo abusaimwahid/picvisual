@@ -1,2 +1,3 @@
 import type { MetadataRoute } from "next";
-export default function robots(): MetadataRoute.Robots { return { rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/api"] }], sitemap: "/sitemap.xml" }; }
+import { publicSiteUrl } from "@/lib/public/seo";
+export default async function robots(): Promise<MetadataRoute.Robots> { return { rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/api"] }], sitemap: `${await publicSiteUrl()}/sitemap.xml` }; }

@@ -1,0 +1,4 @@
+"use client";
+import { useActionState } from "react";
+import { changePassword } from "@/app/admin/actions";
+export function PasswordForm() { const [state, action, pending] = useActionState(changePassword, {}); return <form action={action} className="admin-card admin-content-form"><label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label><label>New password<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={72} required /></label><label>Confirm new password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={72} required /></label><p>Changing your password signs out existing sessions.</p>{state.error && <p role="alert">{state.error}</p>}<button disabled={pending}>{pending ? "Saving…" : "Change password"}</button></form>; }

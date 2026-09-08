@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { validateSvg } from "./validation";
+export { validateSvg } from "./validation";
 
 export const brandAssetKinds = ["mainLogo", "compactLogo", "favicon", "socialLogo"] as const;
 export type BrandAssetKind = (typeof brandAssetKinds)[number];
@@ -18,14 +20,11 @@ function hasPngSignature(bytes: Uint8Array) { return bytes.length >= 8 && [137, 
 function hasWebpSignature(bytes: Uint8Array) { return bytes.length >= 12 && new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" && new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP"; }
 function hasIcoSignature(bytes: Uint8Array) { return bytes.length >= 4 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0; }
 
-export function validateSvg(svg: string) {
-  if (!/<svg[\s>]/i.test(svg)) throw new Error("The SVG file is not valid.");
-  if (/<\s*(script|foreignObject|iframe|object|embed|audio|video)\b/i.test(svg) || /\bon\w+\s*=/i.test(svg) || /(?:href|xlink:href)\s*=\s*["']\s*(?:javascript:|https?:|\/\/)/i.test(svg) || /@import|url\s*\(\s*["']?\s*(?:https?:|\/\/)/i.test(svg)) throw new Error("The SVG contains unsafe active or remote content.");
-}
-
 export function validateBrandAsset(kind: BrandAssetKind, file: { name: string; type: string; size: number; bytes: Uint8Array }) {
   const config = configs[kind]; const ext = extension(file.name);
   if (!config.extensions.includes(ext as never) || !config.types.includes(file.type as never)) throw new Error(`${config.label} must be ${config.extensions.map((value) => `.${value}`).join(", ")}.`);
+  const expected = ({ png: "image/png", webp: "image/webp", svg: "image/svg+xml", ico: file.type === "image/vnd.microsoft.icon" ? file.type : "image/x-icon" } as Record<string, string>)[ext];
+  if (file.type !== expected) throw new Error("The file extension does not match its MIME type.");
   if (file.size <= 0 || file.size > config.maxSize) throw new Error(`${config.label} exceeds the ${Math.round(config.maxSize / 1024)} KB limit.`);
   if (ext === "png" && !hasPngSignature(file.bytes)) throw new Error("The PNG file signature is invalid.");
   if (ext === "webp" && !hasWebpSignature(file.bytes)) throw new Error("The WebP file signature is invalid.");

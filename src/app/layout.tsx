@@ -19,45 +19,9 @@ const display = Space_Grotesk({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  let favicon: string | undefined;
-  let social: string | undefined;
-
-  /*
-   * Important for Vercel/static preview deployments:
-   * Do not import Prisma-backed branding code unless a database
-   * is actually configured. The public site can safely run from
-   * the approved fallback content without DATABASE_URL.
-   */
-  if (process.env.DATABASE_URL) {
-    try {
-      const { getPublicBrandSettings } = await import("@/lib/brand/settings");
-      const brand = await getPublicBrandSettings();
-
-      favicon = brand.favicon?.url;
-      social = brand.socialLogo?.url;
-    } catch {
-      // Branding DB is optional for the public fallback deployment.
-    }
-  }
-
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.SITE_URL ||
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000");
-
-  return {
-    title: "PicVisual — Image & Video Post-Production for Brands & E-commerce",
-    description:
-      "High-end image and video post-production for e-commerce, fashion, beauty and product brands. Retouching, product editing, motion post and creative finishing by PicVisual.",
-    metadataBase: new URL(siteUrl),
-    icons: favicon ? { icon: favicon } : undefined,
-    openGraph: social ? { images: [{ url: social }] } : undefined,
-    twitter: social ? { images: [social] } : undefined,
-  };
+  const [{ publicSiteUrl, defaultSocialImage }, { getPublicSiteSettings }, { getPublicBrandSettings }] = await Promise.all([import("@/lib/public/seo"), import("@/lib/public/readers"), import("@/lib/brand/settings")]);
+  const [url, social, settings, brand] = await Promise.all([publicSiteUrl(), defaultSocialImage(), getPublicSiteSettings(), getPublicBrandSettings()]);
+  return { metadataBase: new URL(url), title: settings.data.seoTitle, description: settings.data.description, icons: { icon: brand.favicon?.url || "/brand/picvisual-logo.png" }, openGraph: { images: [{ url: social }], siteName: settings.data.name, type: "website" }, twitter: { card: "summary_large_image", images: [social] } };
 }
 
 export default function RootLayout({

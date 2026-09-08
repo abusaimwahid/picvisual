@@ -1,0 +1,3 @@
+"use client";
+import { useSearchParams } from "next/navigation";
+export function ActionNotice() { const params = useSearchParams(); const error = params.get("error"); const success = params.get("success"); const value = error || success; if (!value) return null; const text = value.replaceAll("-", " "); return <div className="admin-notice" role={error ? "alert" : "status"}>{error ? "Could not complete the action: " : "Success: "}{text.charAt(0).toUpperCase() + text.slice(1)}{error === "invalid-project" && ". Check required fields and ensure the summary has at least 10 characters."}{error === "confirm-slug-change" && ". Confirm the URL change in the project form before publishing."}</div>; }

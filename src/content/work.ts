@@ -1,5 +1,20 @@
+export type PublicAsset = { publicUrl: string; alt: string | null; focalX?: number | null; focalY?: number | null; width?: number | null; height?: number | null };
 export type Project = {
+  id?: string;
   slug: string;
+  description?: string | null;
+  clientName?: string | null;
+  year?: number | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  featured?: boolean;
+  featuredOrder?: number | null;
+  hero?: PublicAsset;
+  before?: PublicAsset;
+  after?: PublicAsset;
+  video?: PublicAsset;
+  poster?: PublicAsset;
+  ogImage?: PublicAsset;
   title: string;
   category: string;
   scope: string;
@@ -7,16 +22,10 @@ export type Project = {
   tone: "sky" | "azure" | "mist" | "navy";
   size: "wide" | "portrait" | "square";
   services: string[];
-  gallery?: Array<{ publicUrl: string; mediaType: "IMAGE" | "VIDEO"; alt: string | null; caption: string | null }>;
-  thumbnail?: { publicUrl: string; alt: string | null; focalX: number | null; focalY: number | null };
+  gallery?: Array<{ publicUrl: string; mediaType: "IMAGE" | "VIDEO"; alt: string | null; caption: string | null; focalX?: number | null; focalY?: number | null; role?: string }>;
+  thumbnail?: PublicAsset;
 };
 
-// Replace these art-directed placeholder entries with verified PicVisual project media.
-export const projects: Project[] = [
-  { slug: "form-and-finish", title: "Form / Finish", category: "Product", scope: "Image post-production", summary: "A compositional study in finish, form and controlled contrast.", tone: "sky", size: "wide", services: ["Product finishing", "Colour work", "Compositing"] },
-  { slug: "skin-in-motion", title: "Skin in Motion", category: "Beauty", scope: "Motion post-production", summary: "Beauty visual language, refined for a moving frame.", tone: "azure", size: "portrait", services: ["Retouching", "Motion editing", "Colour finishing"] },
-  { slug: "everyday-objects", title: "Everyday Objects", category: "E-commerce", scope: "Image post-production", summary: "Clear, repeatable product imagery with a campaign sensibility.", tone: "mist", size: "square", services: ["E-commerce editing", "Brand consistency"] },
-  { slug: "lightwork", title: "Lightwork", category: "Fashion", scope: "Creative production", summary: "Layered fashion imagery with a graphic, high-contrast finish.", tone: "navy", size: "wide", services: ["Fashion retouching", "Creative compositing"] },
-];
-
+// Portfolio entries are supplied only by approved, published CMS records.
+export const projects: Project[] = [];
 export const getProject = (slug: string) => projects.find((project) => project.slug === slug);
