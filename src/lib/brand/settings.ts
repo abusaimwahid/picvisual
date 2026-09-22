@@ -19,5 +19,6 @@ async function readBrandSettings(): Promise<PublicBrandSettings> {
   } catch { return {}; }
 }
 
-export const getPublicBrandSettings = unstable_cache(readBrandSettings, ["public-brand-settings"], { tags: ["brand-settings"] });
+const brandReaderModeKey = hasDatabaseUrl() ? "database" : "fallback";
+export const getPublicBrandSettings = unstable_cache(readBrandSettings, ["public-brand-settings", brandReaderModeKey], { tags: ["brand-settings"] });
 export const brandSettingKeys = keys;

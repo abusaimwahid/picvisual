@@ -4,6 +4,10 @@ import { pageCopy } from "../src/content/pages";
 import { snapshotJson } from "../src/cms/catalog-publication";
 import { makeHomepageSnapshot, readHomepageSnapshot, validateHomepageSnapshot } from "../src/cms/homepage-publication";
 import { sectionSchemas, type SectionType } from "../src/cms/types/sections";
+import { ensureProjectRevisionBaseline } from "../src/cms/project-revisions";
+import { publishAboutRevision } from "../src/cms/about-publication";
+import { defaultAboutContent } from "../src/content/about";
+import { services } from "../src/content/services";
 const db = new PrismaClient();
 async function main() {
   const identity = new URL(process.env.DATABASE_URL!);
@@ -15,19 +19,58 @@ async function main() {
   const alts = ["Full-length apparel image of a red turtleneck sweater with dark wide-leg jeans", "Close detail of red knitwear, ribbed collar and pink lettering", "Side detail showing knit texture, cuff and garment drape", "Full-length styled view of red knitwear with a dark tote bag"];
   await db.$transaction(async (tx) => {
     for (const [index, asset] of media.entries()) if (!asset.alt) await tx.media.update({ where: { id: asset.id }, data: { alt: alts[index], focalX: 50, focalY: index === 1 || index === 2 ? 40 : 50 } });
-    const fields = { title: "CHAMOIS", category: "Apparel", summary: "A selection of approved PicVisual imagery featuring CHAMOIS apparel.", description: "Full-length views and close details of red knitwear. This selection brings together four approved images.", services: [], featured: true, featuredOrder: 0, heroMediaId: media[3].id, thumbnailMediaId: media[0].id, ogImageId: media[3].id, seoTitle: "CHAMOIS — PicVisual", seoDescription: "Four approved PicVisual images featuring CHAMOIS apparel, from full-length views to knitwear details." };
-    const project = await tx.project.upsert({ where: { slug: "apparel-color-and-texture" }, update: {}, create: { slug: "apparel-color-and-texture", ...fields, status: "PUBLISHED", publishedAt: new Date() } });
-    for (const [index, asset] of media.entries()) await tx.projectMedia.upsert({ where: { projectId_mediaId: { projectId: project.id, mediaId: asset.id } }, update: {}, create: { projectId: project.id, mediaId: asset.id, order: index, role: index === 1 || index === 2 ? "DETAIL" : "GALLERY", alt: alts[index] } });
+    const fields = { title: "CHAMOIS", category: "Apparel", summary: "A visual post-production selection from PicVisual.", description: null, services: [], featured: true, featuredOrder: 0, isCaseStudy: true, caseStudyOrder: 0, heroMediaId: media[3].id, thumbnailMediaId: media[0].id, ogImageId: media[3].id, seoTitle: "CHAMOIS — PicVisual", seoDescription: "A four-image visual post-production selection featuring CHAMOIS apparel." };
+    const project = await tx.project.upsert({ where: { slug: "apparel-color-and-texture" }, update: { isCaseStudy: true, caseStudyOrder: 0 }, create: { slug: "apparel-color-and-texture", ...fields, status: "PUBLISHED", publishedAt: new Date() } });
+    for (const [index, asset] of media.entries()) await tx.projectMedia.upsert({ where: { projectId_mediaId: { projectId: project.id, mediaId: asset.id } }, update: {}, create: { projectId: project.id, mediaId: asset.id, order: index, role: index === 1 || index === 2 ? "DETAIL" : "GALLERY", layout: index === 1 || index === 2 ? "PORTRAIT_PAIR" : "LANDSCAPE", alt: alts[index] } });
     if (!project.publishedSnapshot) { const complete = await tx.project.findUniqueOrThrow({ where: { id: project.id }, include: { media: { orderBy: { order: "asc" } } } }); await tx.project.update({ where: { id: project.id }, data: { publishedSlug: project.slug, publishedSnapshot: snapshotJson(complete) } }); }
+    await ensureProjectRevisionBaseline(tx, project.id);
     // Only known original demo rows with no chosen portfolio assets are archived.
     await tx.project.updateMany({ where: { slug: { in: ["form-and-finish", "skin-in-motion", "everyday-objects", "lightwork"] }, heroMediaId: null, thumbnailMediaId: null }, data: { status: "ARCHIVED", featured: false } });
     const global = await tx.siteSetting.findUnique({ where: { key: "global" } });
     const old = global?.value && typeof global.value === "object" ? global.value as Record<string, Prisma.InputJsonValue> : {};
     await tx.siteSetting.upsert({ where: { key: "global" }, update: { value: { ...old, contactEmail: old.contactEmail === "hello@picvisual.example" || !old.contactEmail ? "info@picvisual.com" : old.contactEmail } }, create: { key: "global", value: { siteName: "PicVisual", contactEmail: "info@picvisual.com", description: "Image and video post-production for brands, e-commerce and creative teams." } } });
     for (const [slug, copy] of Object.entries(pageCopy)) {
-      const page = await tx.page.findUnique({ where: { slug }, include: { sections: true } });
-      if (!page) continue;
+      const page = await tx.page.upsert({ where: { slug }, update: {}, create: { slug, title: copy.title, pageType: slug.replaceAll("-", "_").toUpperCase(), status: "PUBLISHED", publishedAt: new Date() }, include: { sections: true } });
       if (!page.sections.length) { await tx.page.update({ where: { id: page.id }, data: { title: copy.title } }); await tx.pageSection.create({ data: { pageId: page.id, order: 0, type: "richText", content: { body: copy.body, approachHeading: copy.approachHeading, approachBody: copy.approachBody } } }); }
+    }
+    const aboutTitle = await tx.page.findUnique({ where: { slug: "about" } });
+    if (aboutTitle?.title.replace(/\s/g, "") === "Yourproductionpartneraftertheshoot.") {
+      await tx.page.update({ where: { id: aboutTitle.id }, data: { title: "PicVisual Studio" } });
+      await publishAboutRevision(tx, aboutTitle.id);
+    }
+    for (const service of services) {
+      const slug = service.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const current = await tx.service.findUnique({ where: { slug } });
+      if (!current || current.status !== "PUBLISHED" || current.description === service.items.join("\n")) continue;
+      const updated = await tx.service.update({ where: { id: current.id }, data: { shortDescription: service.description, description: service.items.join("\n") } });
+      await tx.service.update({ where: { id: current.id }, data: { publishedSnapshot: snapshotJson(updated) } });
+    }
+    if (!await tx.siteSetting.findUnique({ where: { key: "launch.final-editorial.20260909" } })) {
+      for (const [slug, copy] of Object.entries(pageCopy)) {
+        const page = await tx.page.findUnique({ where: { slug }, include: { sections: { where: { type: "richText" }, orderBy: { order: "asc" }, take: 1 } } });
+        if (!page || slug === "about") continue;
+        await tx.page.update({ where: { id: page.id }, data: { title: copy.title } });
+        const content = { body: copy.body, approachHeading: copy.approachHeading, approachBody: copy.approachBody };
+        if (page.sections[0]) await tx.pageSection.update({ where: { id: page.sections[0].id }, data: { content } });
+        else await tx.pageSection.create({ data: { pageId: page.id, type: "richText", order: 0, content } });
+      }
+      const about = await tx.page.findUnique({ where: { slug: "about" }, include: { sections: true } });
+      if (about) {
+        for (const type of ["capabilities", "studioMedia"] as const) {
+          const section = about.sections.find((item) => item.type === type);
+          if (!section || !section.content || typeof section.content !== "object") continue;
+          await tx.pageSection.update({ where: { id: section.id }, data: { content: { ...(section.content as object), body: defaultAboutContent[type].body } } });
+        }
+        await publishAboutRevision(tx, about.id);
+      }
+      for (const service of services) {
+        const slug = service.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        const current = await tx.service.findUnique({ where: { slug } });
+        if (!current || current.status !== "PUBLISHED") continue;
+        const updated = await tx.service.update({ where: { id: current.id }, data: { category: service.shortTitle, shortDescription: service.description, description: service.items.join("\n") } });
+        await tx.service.update({ where: { id: current.id }, data: { publishedSnapshot: snapshotJson(updated) } });
+      }
+      await tx.siteSetting.create({ data: { key: "launch.final-editorial.20260909", value: { scope: "public copy and CMS consistency", appliedLocally: true } } });
     }
     const footer = await tx.navigation.upsert({ where: { kind: "FOOTER" }, create: { kind: "FOOTER", name: "Footer" }, update: {} });
     if (await tx.navigationItem.count({ where: { navigationId: footer.id } }) === 0) for (const [order, [label, href]] of [["Work", "/work"], ["Services", "/services"], ["Studio", "/about"], ["Contact", "/contact"]].entries()) await tx.navigationItem.create({ data: { navigationId: footer.id, label, href, order } });

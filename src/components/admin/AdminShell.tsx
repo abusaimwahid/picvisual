@@ -7,7 +7,7 @@ import { BrandLogo } from "@/components/ui/BrandLogo";
 import type { PublicBrandSettings } from "@/lib/brand/settings";
 
 const navigation = [
-  ["Dashboard", "/admin"], ["Your account", "/admin/account"], ["Homepage", "/admin/homepage"], ["Pages", "/admin/pages"], ["Projects", "/admin/projects"], ["Services", "/admin/services"], ["Media", "/admin/media"], ["Testimonials", "/admin/testimonials"], ["Clients", "/admin/clients"], ["FAQ", "/admin/faq"], ["Navigation", "/admin/navigation"], ["Enquiries", "/admin/enquiries"], ["Site settings", "/admin/settings"], ["Brand settings", "/admin/settings/branding"], ["Users", "/admin/users"],
+  ["Dashboard", "/admin"], ["Your account", "/admin/account"], ["Homepage", "/admin/homepage"], ["Studio page", "/admin/pages/about"], ["Projects", "/admin/projects"], ["Case Studies", "/admin/case-studies"], ["Services", "/admin/services"], ["Media", "/admin/media"], ["Testimonials", "/admin/testimonials"], ["Clients", "/admin/clients"], ["FAQ", "/admin/faq"], ["Navigation", "/admin/navigation"], ["Enquiries", "/admin/enquiries"], ["Site settings", "/admin/settings"], ["Brand settings", "/admin/settings/branding"], ["Users", "/admin/users"],
 ] as const;
 
 export function AdminShell({ user, children, brand }: { user: AdminUser; children: React.ReactNode; brand?: PublicBrandSettings }) {

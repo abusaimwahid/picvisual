@@ -1,9 +1,6 @@
-import { CmsImage } from "@/components/ui/CmsImage";
-import { getPublicStudioProof } from "@/lib/public/readers";
-import { isSafeHref } from "@/lib/validation/site";
 import { pageMetadata } from "@/lib/public/seo";
-import Link from "next/link";
 import { SiteChrome } from "@/components/layout/SiteChrome";
-import { getPageCopy } from "@/lib/public/page-copy";
-export async function generateMetadata() { return pageMetadata("about", "Studio — PicVisual", "A post-production partner built around visual craft, consistency and collaboration."); }
-export default async function AboutPage() { const [copy, proof] = await Promise.all([getPageCopy("about"), getPublicStudioProof()]); return <SiteChrome><main id="main" className="inner-page"><section className="page-intro"><span className="eyebrow">STUDIO / PICVISUAL</span><h1>{copy.title}</h1><p>{copy.body}</p></section><section className="about-statement"><div className="about-image"><span>COMPOSITION / CRAFT / CONSISTENCY</span><div /></div><div><span className="section-number">OUR APPROACH</span><h2>{copy.approachHeading}</h2>{copy.approachBody.split("\n\n").map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<Link className="text-link dark" href="/contact">Work with PicVisual <i>↗</i></Link></div></section>{proof.clients.length > 0 && <section className="studio-proof"><h2>Selected clients</h2><div className="studio-client-list">{proof.clients.map(client => <div key={client.id}>{client.logoMedia && <CmsImage asset={{...client.logoMedia,alt:client.name}} sizes="160px" />}{client.website && isSafeHref(client.website) ? <a href={client.website} target="_blank" rel="noopener noreferrer">{client.name} ↗</a> : <span>{client.name}</span>}</div>)}</div></section>}{proof.testimonials.length > 0 && <section className="studio-proof"><h2>From our collaborators</h2>{proof.testimonials.map(item => <figure key={item.id}>{item.media && <CmsImage asset={{...item.media,alt:item.person ?? ""}} sizes="80px" />}<blockquote>{item.quote}</blockquote><figcaption>{[item.person,item.role,item.company].filter(Boolean).join(" · ")}</figcaption></figure>)}</section>}</main></SiteChrome>; }
+import { StudioContent } from "@/components/about/StudioContent";
+import { getPublicAboutContent } from "@/lib/public/readers";
+export async function generateMetadata() { return pageMetadata("about", "Studio — PicVisual", "The production partner after the shoot—image, motion and commercial post-production by PicVisual."); }
+export default async function AboutPage() { const studio = await getPublicAboutContent(); return <SiteChrome><StudioContent content={studio.content} enabled={studio.enabled} order={studio.order} media={studio.media} services={studio.services} /></SiteChrome>; }

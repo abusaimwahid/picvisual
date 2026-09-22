@@ -4,9 +4,7 @@ import "./globals.css";
 import "./admin-cms.css";
 import "./admin-homepage.css";
 import "./home-cms.css";
-import "./immersive.css";
-import "./immersive-polish.css";
-import "./immersive-correction.css";
+import "./homepage.css";
 
 const body = DM_Sans({
   subsets: ["latin"],
@@ -21,7 +19,7 @@ const display = Space_Grotesk({
 export async function generateMetadata(): Promise<Metadata> {
   const [{ publicSiteUrl, defaultSocialImage }, { getPublicSiteSettings }, { getPublicBrandSettings }] = await Promise.all([import("@/lib/public/seo"), import("@/lib/public/readers"), import("@/lib/brand/settings")]);
   const [url, social, settings, brand] = await Promise.all([publicSiteUrl(), defaultSocialImage(), getPublicSiteSettings(), getPublicBrandSettings()]);
-  return { metadataBase: new URL(url), title: settings.data.seoTitle, description: settings.data.description, icons: { icon: brand.favicon?.url || "/brand/picvisual-logo.png" }, openGraph: { images: [{ url: social }], siteName: settings.data.name, type: "website" }, twitter: { card: "summary_large_image", images: [social] } };
+  return { metadataBase: new URL(url), title: settings.data.seoTitle, description: settings.data.description, icons: { icon: brand.favicon?.url || "/brand/picvisual-logo.png" }, openGraph: { ...(social ? { images: [{ url: social }] } : {}), siteName: settings.data.name, type: "website" }, twitter: { card: social ? "summary_large_image" : "summary", ...(social ? { images: [social] } : {}) } };
 }
 
 export default function RootLayout({

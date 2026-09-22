@@ -9,6 +9,14 @@ export type Project = {
   seoDescription?: string | null;
   featured?: boolean;
   featuredOrder?: number | null;
+  isCaseStudy?: boolean;
+  caseStudyOrder?: number | null;
+  eyebrow?: string | null;
+  intro?: string | null;
+  challenge?: string | null;
+  approach?: string | null;
+  productionNotes?: string | null;
+  outcome?: string | null;
   hero?: PublicAsset;
   before?: PublicAsset;
   after?: PublicAsset;
@@ -22,7 +30,7 @@ export type Project = {
   tone: "sky" | "azure" | "mist" | "navy";
   size: "wide" | "portrait" | "square";
   services: string[];
-  gallery?: Array<{ publicUrl: string; mediaType: "IMAGE" | "VIDEO"; alt: string | null; caption: string | null; focalX?: number | null; focalY?: number | null; role?: string }>;
+  gallery?: Array<{ publicUrl: string; mediaType: "IMAGE" | "VIDEO"; alt: string | null; caption: string | null; focalX?: number | null; focalY?: number | null; width?: number | null; height?: number | null; role?: string; layout?: string }>;
   thumbnail?: PublicAsset;
 };
 

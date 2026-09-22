@@ -22,7 +22,7 @@ export function ContactForm() {
     <label>Tell us about the work<textarea name="message" required minLength={10} maxLength={4000} rows={5} placeholder="The visual brief, intended channels and anything useful to know." disabled={complete} /></label>
     <div className="contact-honeypot" aria-hidden="true"><label>Website<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
     <p className="contact-privacy">We use these details to respond to your enquiry. <Link href="/privacy">Privacy policy</Link></p>
-    <button className="button button-light" type="submit" disabled={pending || complete}>{pending ? "Sending…" : complete ? "Enquiry received" : "Start the conversation"} <i>↗</i></button>
+    <button className="button button-light" type="submit" disabled={pending || complete}>{pending ? "Sending…" : complete ? "Enquiry received" : "Start a Project"} <i>↗</i></button>
     {message && <p id="contact-status" className="form-status" role={complete ? "status" : "alert"}>{message}</p>}
   </form>;
 }
