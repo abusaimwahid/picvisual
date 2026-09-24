@@ -8,7 +8,7 @@ import { getPublicCaseStudies } from "@/lib/public/readers";
 export async function generateStaticParams() { return (await getPublicCaseStudies()).data.map(({ slug }) => ({ slug })); }
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const slug = (await params).slug; const studies = (await getPublicCaseStudies()).data; const project = studies.find((item) => item.slug === slug);
-  if (!project) return { robots: { index: false, follow: false } };
+  if (!project) return { title: "Page not found — PicVisual", description: "This PicVisual page could not be found.", robots: { index: false, follow: false } };
   const title = project.seoTitle || `${project.title} — PicVisual`; const description = project.seoDescription || project.summary; const url = `${await publicSiteUrl()}/case-studies/${project.slug}`; const image = project.ogImage?.publicUrl || project.hero?.publicUrl || await defaultSocialImage();
   return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, ...(image ? { images: [{ url: image }] } : {}), type: "article" }, twitter: { card: image ? "summary_large_image" : "summary", title, description, ...(image ? { images: [image] } : {}) } };
 }

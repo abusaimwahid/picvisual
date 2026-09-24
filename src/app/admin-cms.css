@@ -78,3 +78,5 @@
 .media-library-empty { display: grid; gap: 18px; }
 .media-library-empty > .button { width: max-content; }
 .media-library-empty > p { max-width: 680px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+
+.admin-field-hint{font-size:12px;line-height:1.45;color:var(--text-secondary);margin:0 0 12px}

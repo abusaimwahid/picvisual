@@ -12,11 +12,14 @@ export function SiteHeader({ brand, navigation = site.navigation, cta = { label:
   const menu = useRef<HTMLDivElement>(null); const toggle = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const isHome = pathname === "/";
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 36);
-    handleScroll(); window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    const handleScroll = () => setScrolled(window.scrollY >= (isHome ? window.innerHeight : 36));
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+    return () => { window.removeEventListener("scroll", handleScroll); window.removeEventListener("resize", handleScroll); };
+  }, [isHome]);
   useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
   useEffect(() => { const onResize = () => { if (window.innerWidth > 800) setOpen(false); }; window.addEventListener("resize", onResize, { passive: true }); return () => window.removeEventListener("resize", onResize); }, []);
   useEffect(() => {
@@ -34,7 +37,7 @@ export function SiteHeader({ brand, navigation = site.navigation, cta = { label:
     return () => document.removeEventListener("keydown", keydown);
   }, [open]);
   const isCurrent = (href: string) => href.startsWith("/") && (pathname === href || pathname.startsWith(`${href}/`));
-  return <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
+  return <header className={`site-header ${isHome ? "is-home" : ""} ${scrolled ? "is-scrolled" : ""}`}>
     <Link className="site-logo" href="/" aria-label="PicVisual home"><BrandLogo className="site-logo-image" source={brand?.mainLogo} priority /></Link>
     <nav className="desktop-nav" aria-label="Primary navigation">{navigation.map((item) => <Link key={item.href} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined}>{item.label}</Link>)}</nav>
     <Link className="header-cta desktop-cta" href={cta.href}>{cta.label} <i>↗</i></Link>
