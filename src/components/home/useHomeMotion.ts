@@ -168,9 +168,6 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
         const planes = world.querySelectorAll<HTMLElement>(".pvh-plane");
         const title = world.querySelector<HTMLElement>(".pvh-world-title");
         const body = world.querySelector<HTMLElement>(".pvh-world-copy p");
-        const progress = world.querySelector<HTMLElement>(".pvh-scene-progress i");
-        const beats = world.querySelectorAll<HTMLElement>(".pvh-scene-progress span");
-        const interfaceLayer = world.querySelector<HTMLElement>(".pvh-editing-ui, .pvh-motion-ui, .pvh-compose-ui");
         const type = WORLD_TYPES.find((candidate) => world.classList.contains(`world-${candidate}`)) || "imagePost";
         const config = worldMotion[type];
         const timeline = gsap.timeline({ scrollTrigger: { trigger: world, start: isMobile ? "top 88%" : "top 72%", end: isMobile ? "bottom 22%" : "bottom 18%", scrub: isMobile ? .65 : 1.15 } });
@@ -183,10 +180,7 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
         });
         timeline
           .fromTo(title, { xPercent: isMobile ? -5 : (world.classList.contains("world-2") || world.classList.contains("world-4") ? 13 : -10), yPercent: 13, autoAlpha: .58 }, { xPercent: isMobile ? 0 : 6, yPercent: -12, autoAlpha: 1, ease: "none", duration: .9 }, 0)
-          .fromTo(body, { yPercent: 18, autoAlpha: .3 }, { yPercent: -6, autoAlpha: 1, ease: "none", duration: .62 }, .18)
-          .fromTo(progress, { scaleX: 0 }, { scaleX: 1, transformOrigin: "left center", ease: "none", duration: .94 }, .02)
-          .fromTo(beats, { autoAlpha: .18, y: 8 }, { autoAlpha: 1, y: 0, stagger: .16, ease: "none", duration: .5 }, .15);
-        if (interfaceLayer) timeline.fromTo(interfaceLayer, { autoAlpha: 0, yPercent: 22, z: -90 }, { autoAlpha: 1, yPercent: -5, z: 150, force3D: true, ease: "none", duration: .72 }, .16);
+          .fromTo(body, { yPercent: 18, autoAlpha: .3 }, { yPercent: -6, autoAlpha: 1, ease: "none", duration: .62 }, .18);
       });
 
       if (!isMobile) {
@@ -254,19 +248,24 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
         const sampleRail = work.querySelector<HTMLElement>(".pvh-sample-projects");
         const sampleProjects = work.querySelectorAll<HTMLElement>(".pvh-sample-project");
         if (sampleRail && sampleProjects.length && !isMobile) {
+          const sampleCopies = work.querySelectorAll<HTMLElement>(".pvh-sample-project > div");
           gsap.set(sampleProjects, { autoAlpha: 0, xPercent: 58, yPercent: 7, z: -260, rotateY: -5, scale: .64, transformOrigin: "center center" });
+          gsap.set(sampleCopies, { autoAlpha: 0 });
           gsap.set(sampleProjects[0], { autoAlpha: 1, xPercent: 0, yPercent: 0, z: 60, rotateY: 0, scale: 1 });
-          if (sampleProjects[1]) gsap.set(sampleProjects[1], { autoAlpha: .34, xPercent: 52, yPercent: -4, z: -170, rotateY: -4, scale: .66 });
+          if (sampleCopies[0]) gsap.set(sampleCopies[0], { autoAlpha: 1 });
+          if (sampleProjects[1]) gsap.set(sampleProjects[1], { autoAlpha: .26, xPercent: 45, yPercent: -3, z: -170, rotateY: -4, scale: .68 });
           const relay = gsap.timeline({ scrollTrigger: { trigger: sampleRail, start: "top top", end: "bottom bottom", scrub: .82, invalidateOnRefresh: true } });
           for (let index = 1; index < sampleProjects.length; index += 1) {
             const at = index - 1;
             const previous = sampleProjects[index - 1];
             const current = sampleProjects[index];
             relay
-              .to(previous, { xPercent: -54, yPercent: -11, z: -260, rotateY: 4, scale: .64, autoAlpha: .1, force3D: true, ease: "none", duration: 1 }, at)
+              .to(previous, { xPercent: -54, yPercent: -11, z: -260, rotateY: 4, scale: .64, autoAlpha: 0, force3D: true, ease: "none", duration: .58 }, at)
               .to(current, { xPercent: 0, yPercent: 0, z: 65, rotateY: 0, scale: 1, autoAlpha: 1, force3D: true, ease: "none", duration: 1 }, at);
+            if (sampleCopies[index - 1]) relay.to(sampleCopies[index - 1], { autoAlpha: 0, ease: "none", duration: .1 }, at);
+            if (sampleCopies[index]) relay.to(sampleCopies[index], { autoAlpha: 1, ease: "none", duration: .3 }, at + .5);
             const next = sampleProjects[index + 1];
-            if (next) relay.to(next, { xPercent: 51, yPercent: index % 2 ? 5 : -5, z: -170, rotateY: -4, scale: .66, autoAlpha: .34, force3D: true, ease: "none", duration: .58 }, at + .3);
+            if (next) relay.to(next, { xPercent: 45, yPercent: index % 2 ? 4 : -4, z: -170, rotateY: -4, scale: .68, autoAlpha: .26, force3D: true, ease: "none", duration: .28 }, at + .68);
           }
         }
         const independentlyAnimated = sampleRail && !isMobile
@@ -344,16 +343,12 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
         const cards = why.querySelectorAll<HTMLElement>(".pvh-why-grid article");
         const anchor = why.querySelector<HTMLElement>(".pvh-why-anchor");
         const fragments = why.querySelectorAll<HTMLElement>(".pvh-trust-fragment");
-        const signal = why.querySelector<HTMLElement>(".pvh-why-signal");
-        const signalWord = why.querySelector<HTMLElement>(".pvh-why-signal strong");
         const timeline = gsap.timeline({ scrollTrigger: { trigger: why, start: "top 94%", end: "bottom 14%", scrub: isMobile ? .55 : .92 } });
         timeline
           .fromTo(title, { xPercent: -8, autoAlpha: .45 }, { xPercent: isMobile ? 0 : 4, autoAlpha: 1, ease: "none", duration: .55 }, 0)
           .fromTo(anchor, { xPercent: isMobile ? 0 : 19, yPercent: 18, z: -160, scale: .9, autoAlpha: .42 }, { xPercent: 0, yPercent: -9, z: 65, scale: 1.02, autoAlpha: .78, force3D: true, ease: "none", duration: .78 }, 0)
           .fromTo(cards, { y: isMobile ? 24 : 62, z: isMobile ? 0 : -80, autoAlpha: .3 }, { y: 0, z: 25, autoAlpha: 1, stagger: .09, force3D: true, ease: "none", duration: .6 }, .16)
           .fromTo(fragments, { yPercent: 24, xPercent: isMobile ? 0 : -7, scale: 1.12 }, { yPercent: -8, xPercent: isMobile ? 0 : 4, scale: 1, stagger: .08, ease: "none", duration: .62 }, .18)
-          .fromTo(signal, { clipPath: "inset(12% 8% 12% 8%)", z: -80 }, { clipPath: "inset(0% 0% 0% 0%)", z: 25, force3D: true, ease: "none", duration: .74 }, .28)
-          .fromTo(signalWord, { xPercent: -12, autoAlpha: .04 }, { xPercent: 5, autoAlpha: .18, ease: "none", duration: .72 }, .28)
           .to(anchor, { yPercent: -24, z: -120, scale: .94, autoAlpha: .38, force3D: true, ease: "none", duration: .24 }, .76);
       }
 

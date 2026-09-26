@@ -64,16 +64,6 @@ const capabilityChips = [
   "APPAREL", "VIDEO POST", "COLOR", "MOTION", "COMPOSITING",
 ];
 
-const sceneBeats: Record<string, string[]> = {
-  imagePost: ["RAW", "DETAIL", "FINAL"],
-  product: ["SOURCE", "CLEANUP", "POLISHED"],
-  jewelry: ["MACRO", "LIGHT", "FINISH"],
-  videoEdit: ["CUT", "GRADE", "DELIVER"],
-  motion: ["FRAME 01", "FRAME 12", "FRAME 24"],
-  creative: ["LAYERS", "ALIGN", "COMPOSITE"],
-  development: ["LAYERS", "ALIGN", "COMPOSITE"],
-};
-
 function section<T>(sections: HomepageSection[] | undefined, type: string): T | undefined {
   const value = sections?.find((item) => item.type === type)?.content;
   return value && typeof value === "object" ? value as T : undefined;
@@ -294,20 +284,6 @@ export function HomePage({ content }: { content?: HomeContent }) {
                 {world.source === "demo" && planeIndex === 0 && <DemoCaption asset={asset as DemoAsset} />}
               </figure>
             ))}
-            {world.type === "videoEdit" && <div className="pvh-editing-ui" aria-hidden="true">
-              <span className="pvh-scope"><i /><i /><i /><i /><i /></span>
-              <span className="pvh-edit-time">00:18:24</span>
-              <span className="pvh-edit-track"><i /><i /><i /><i /><i /><i /><i /><i /></span>
-            </div>}
-            {world.type === "motion" && <div className="pvh-motion-ui" aria-hidden="true">
-              <span>FRAME 01</span><i /><i /><i /><i /><i /><i /><i /><i /><span>FRAME 24</span>
-              <svg viewBox="0 0 160 54" role="presentation"><path d="M2 50 C38 50 35 5 78 25 S122 4 158 3" /></svg>
-            </div>}
-            {(world.type === "creative" || world.type === "development") && <div className="pvh-compose-ui" aria-hidden="true"><span>SUBJECT</span><span>LIGHT</span><span>TEXTURE</span><i /></div>}
-            <div className="pvh-scene-progress" aria-hidden="true">
-              <i />
-              {(sceneBeats[world.type] || ["SOURCE", "CRAFT", "FINAL"]).map((beat) => <span key={beat}>{beat}</span>)}
-            </div>
           </div>
         </section>
       ))}
@@ -347,7 +323,6 @@ export function HomePage({ content }: { content?: HomeContent }) {
           <figure className="pvh-process-media">
             <MediaAsset asset={processAsset} />
             {!galleryIds.length && <DemoCaption asset={processAsset as DemoAsset} />}
-            <figcaption><span>BRIEF</span><i /><span>DELIVERY</span></figcaption>
           </figure>
           {processSupport.map((asset, index) => (
             <figure className={`pvh-process-support support-${index + 1}`} key={`${asset.publicUrl}-process`}>
@@ -419,15 +394,17 @@ export function HomePage({ content }: { content?: HomeContent }) {
           <h2>{selectedWork?.heading || "Selected Work"}</h2>
         </header>
         {projectMode === "empty" ? (
-          <div className="pvh-sample-projects">
-            <div className="pvh-portfolio-stage">
-              {demoPortfolio.map((item, index) => <article className={`pvh-sample-project sample-${index + 1}`} key={item.title}>
-                <figure><CmsImage asset={item.asset} sizes="(max-width: 800px) 100vw, 68vw" /><DemoCaption asset={item.asset} /></figure>
-                <div><span>{String(index + 1).padStart(2, "0")} / {item.category} · {item.scope}</span><h3>{item.title}</h3><p>{item.summary}</p></div>
-              </article>)}
-              <div className="pvh-sample-note"><p>{selectedWork?.description || "These sample concepts demonstrate the presentation system. Published CMS projects replace them automatically."}</p><Link className="pvh-text-link" href="/contact">Start a Project <i>↗</i></Link></div>
+          <>
+            <div className="pvh-sample-projects">
+              <div className="pvh-portfolio-stage">
+                {demoPortfolio.map((item, index) => <article className={`pvh-sample-project sample-${index + 1}`} key={item.title}>
+                  <figure><CmsImage asset={item.asset} sizes="(max-width: 800px) 100vw, 62vw" /></figure>
+                  <div><span>{String(index + 1).padStart(2, "0")} / {item.category} · {item.scope}</span><h3>{item.title}</h3><p>{item.summary}</p></div>
+                </article>)}
+              </div>
             </div>
-          </div>
+            <div className="pvh-sample-note"><p>{selectedWork?.description || "These sample concepts demonstrate the presentation system. Published CMS projects replace them automatically."}</p><Link className="pvh-text-link" href="/contact">Start a Project <i>↗</i></Link></div>
+          </>
         ) : (
           <div className="pvh-projects">{projects.slice(0, 5).map((project, index) => <ProjectCard key={project.slug} project={project} index={index} />)}</div>
         )}
@@ -485,11 +462,7 @@ export function HomePage({ content }: { content?: HomeContent }) {
             </article>
           ))}
         </div>
-        <div className="pvh-why-signal" aria-hidden="true">
-          <span>CONSISTENCY / EVERY ASSET</span><span>CAPACITY / WHEN NEEDED</span><span>DELIVERY / PRODUCTION READY</span>
-          <figure className="pvh-why-media" data-depth="0.08"><CmsImage asset={demoMedia.productMaterial} sizes="(max-width: 800px) 80vw, 36vw" /></figure>
-          <strong>CONTROL<br />AT SCALE</strong><i />
-        </div>
+        <figure className="pvh-why-media-clean" data-depth="0.08" aria-hidden="true"><CmsImage asset={demoMedia.productMaterial} sizes="(max-width: 800px) 100vw, 88vw" /></figure>
       </section>
 
       {faqs.length > 0 && (

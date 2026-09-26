@@ -10,7 +10,7 @@ export function DemoPortfolio({ compact = false }: { compact?: boolean }) {
     </header>
     <div className="demo-portfolio-grid">
       {demoPortfolio.map((item) => <article key={item.title} data-public-reveal>
-        <figure><CmsImage asset={item.asset} sizes="(max-width: 800px) 100vw, 55vw" /><span>CONCEPT</span></figure>
+        <figure><CmsImage asset={item.asset} sizes="(max-width: 800px) 100vw, 55vw" /></figure>
         <div><small>{item.category} · {item.scope}</small><h3>{item.title}</h3><p>{item.summary}</p></div>
       </article>)}
     </div>
