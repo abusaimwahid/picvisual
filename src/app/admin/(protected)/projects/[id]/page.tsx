@@ -15,7 +15,7 @@ export default async function ProjectEditor({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const [project, media, revisions] = await Promise.all([
     prisma.project.findUnique({ where: { id }, include: { media: { include: { media: true }, orderBy: { order: "asc" } } } }),
-    prisma.media.findMany({ select: { id: true, filename: true, publicUrl: true, mediaType: true, alt: true }, take: 120, orderBy: { createdAt: "desc" } }),
+    prisma.media.findMany({ select: { id: true, filename: true, publicUrl: true, mediaType: true, alt: true, caption: true, width: true, height: true }, take: 120, orderBy: { createdAt: "desc" } }),
     prisma.projectRevision.findMany({ where: { projectId: id }, include: { author: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
   if (!project) notFound();

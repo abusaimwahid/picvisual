@@ -72,21 +72,16 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
     const isMobile = window.matchMedia("(max-width: 800px)").matches;
     const isTablet = !isMobile && window.matchMedia("(max-width: 1100px)").matches;
     let alive = true;
-    let rafId = 0;
     let removePointerMotion = () => {};
     const lenis = new Lenis({ duration: isMobile ? .9 : 1.15, smoothWheel: true, touchMultiplier: 1.05 });
     lenis.on("scroll", ScrollTrigger.update);
-
-    const raf = (time: number) => {
-      if (!alive) return;
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    };
-    rafId = requestAnimationFrame(raf);
+    const updateLenis = (time: number) => lenis.raf(time * 1000);
+    gsap.ticker.add(updateLenis);
+    gsap.ticker.lagSmoothing(0);
 
     const ctx = gsap.context(() => {
       root.querySelectorAll<HTMLElement>("[data-reveal]").forEach((element) => {
-        if (element.matches(".pvh-intro, .pvh-world, .pvh-proof, .pvh-process, .pvh-services, .pvh-work, .pvh-gallery, .pvh-why, .pvh-cta")) return;
+        if (element.matches(".pvh-intro, .pvh-world, .pvh-proof, .pvh-process, .pvh-services, .pvh-work, .pvh-gallery, .pvh-capabilities, .pvh-why, .pvh-faq, .pvh-cta")) return;
         gsap.fromTo(element, { autoAlpha: 0, y: 34 }, {
           autoAlpha: 1, y: 0, duration: .9, ease: "power3.out",
           scrollTrigger: { trigger: element, start: "top 88%", toggleActions: "play none none reverse" },
@@ -114,7 +109,7 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
           .to(heroBody, { yPercent: -18, autoAlpha: .14, ease: "none", duration: .62 }, .12)
           .to(heroActions, { yPercent: -8, autoAlpha: 0, ease: "none", duration: .42 }, .38)
           .to(heroDisciplines, { xPercent: isMobile ? 8 : 24, autoAlpha: 0, ease: "none", duration: .45 }, .28);
-        if (intro) heroTimeline.fromTo(intro, { y: isMobile ? 35 : 165 }, { y: 0, ease: "none", duration: .55 }, .42);
+        if (intro) heroTimeline.fromTo(intro, { y: isMobile ? 28 : 92 }, { y: 0, ease: "none", duration: .68 }, .24);
 
         if (!isMobile && window.matchMedia("(pointer: fine)").matches) {
           const stageX = gsap.quickTo(heroStage, "xPercent", { duration: .75, ease: "power3.out" });
@@ -219,16 +214,23 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
 
       const process = root.querySelector<HTMLElement>(".pvh-process");
       if (process) {
+        const composition = process.querySelector<HTMLElement>(".pvh-process-composition");
         const processMedia = process.querySelector<HTMLElement>(".pvh-process-media");
         const processImage = processMedia?.querySelector<HTMLElement>("img, video");
+        const support = process.querySelectorAll<HTMLElement>(".pvh-process-support");
         const processTitle = process.querySelector<HTMLElement>("h2");
         const steps = process.querySelectorAll<HTMLElement>(".pvh-process-rail li");
-        const timeline = gsap.timeline({ scrollTrigger: { trigger: process, start: "top 82%", end: "bottom 20%", scrub: isMobile ? .55 : 1 } });
+        const timeline = gsap.timeline({ scrollTrigger: { trigger: process, start: "top 86%", end: "bottom 12%", scrub: isMobile ? .5 : .88 } });
         timeline
-          .fromTo(processTitle, { xPercent: -8, autoAlpha: .45 }, { xPercent: isMobile ? 0 : 5, autoAlpha: 1, ease: "none", duration: .65 }, 0)
-          .fromTo(processMedia, { clipPath: "inset(10% 10% 10% 10%)", z: -70 }, { clipPath: "inset(0% 0% 0% 0%)", z: 35, force3D: true, ease: "none", duration: .8 }, .08);
-        if (processImage) timeline.fromTo(processImage, { scale: 1.15, yPercent: 7 }, { scale: 1.02, yPercent: -4, ease: "none", duration: .82 }, .08);
-        timeline.fromTo(steps, { y: isMobile ? 24 : 52, autoAlpha: .3 }, { y: 0, autoAlpha: 1, stagger: .08, ease: "none", duration: .52 }, .35);
+          .fromTo(processTitle, { xPercent: -7, autoAlpha: .45 }, { xPercent: isMobile ? 0 : 4, autoAlpha: 1, ease: "none", duration: .45 }, 0)
+          .fromTo(composition, { yPercent: 7, z: -120, scale: .96 }, { yPercent: -3, z: 45, scale: 1, force3D: true, ease: "none", duration: .78 }, .02)
+          .fromTo(processMedia, { clipPath: "inset(9% 10% 9% 10%)", rotateY: isMobile ? 0 : -2.5 }, { clipPath: "inset(0% 0% 0% 0%)", rotateY: 0, force3D: true, ease: "none", duration: .72 }, .03);
+        if (processImage) timeline.fromTo(processImage, { scale: 1.14, yPercent: 6 }, { scale: 1.01, yPercent: -5, ease: "none", duration: .8 }, .03);
+        if (support[0]) timeline.fromTo(support[0], { xPercent: isMobile ? 8 : 55, yPercent: 22, z: 230, rotateY: isMobile ? 0 : -8, scale: .9 }, { xPercent: -7, yPercent: -16, z: 85, rotateY: 0, scale: 1, force3D: true, ease: "none", duration: .72 }, .1);
+        if (support[1]) timeline.fromTo(support[1], { xPercent: isMobile ? -7 : -36, yPercent: 52, z: -150, rotateX: isMobile ? 0 : 4, scale: .82 }, { xPercent: 8, yPercent: -12, z: 165, rotateX: 0, scale: 1.02, force3D: true, ease: "none", duration: .74 }, .2);
+        timeline
+          .fromTo(steps, { y: isMobile ? 22 : 48, autoAlpha: .24 }, { y: 0, autoAlpha: 1, stagger: .055, ease: "none", duration: .46 }, .32)
+          .to(composition, { yPercent: -8, z: -70, scale: .97, force3D: true, ease: "none", duration: .25 }, .75);
       }
 
       const servicesSection = root.querySelector<HTMLElement>(".pvh-services");
@@ -248,8 +250,29 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
       const work = root.querySelector<HTMLElement>(".pvh-work");
       if (work) {
         const workTitle = work.querySelector<HTMLElement>("h2");
-        gsap.fromTo(workTitle, { xPercent: -9, yPercent: 15 }, { xPercent: 7, yPercent: -8, ease: "none", scrollTrigger: { trigger: work, start: "top 88%", end: "top 18%", scrub: isMobile ? .55 : 1 } });
-        work.querySelectorAll<HTMLElement>(".pvh-sample-project, .pvh-project").forEach((project, index) => {
+        gsap.fromTo(workTitle, { xPercent: -7, yPercent: 12 }, { xPercent: isMobile ? 0 : 4, yPercent: -5, scale: isMobile ? 1 : .82, transformOrigin: "left top", ease: "none", scrollTrigger: { trigger: work, start: "top 90%", end: "top 12%", scrub: isMobile ? .5 : .8 } });
+        const sampleRail = work.querySelector<HTMLElement>(".pvh-sample-projects");
+        const sampleProjects = work.querySelectorAll<HTMLElement>(".pvh-sample-project");
+        if (sampleRail && sampleProjects.length && !isMobile) {
+          gsap.set(sampleProjects, { autoAlpha: 0, xPercent: 58, yPercent: 7, z: -260, rotateY: -5, scale: .64, transformOrigin: "center center" });
+          gsap.set(sampleProjects[0], { autoAlpha: 1, xPercent: 0, yPercent: 0, z: 60, rotateY: 0, scale: 1 });
+          if (sampleProjects[1]) gsap.set(sampleProjects[1], { autoAlpha: .34, xPercent: 52, yPercent: -4, z: -170, rotateY: -4, scale: .66 });
+          const relay = gsap.timeline({ scrollTrigger: { trigger: sampleRail, start: "top top", end: "bottom bottom", scrub: .82, invalidateOnRefresh: true } });
+          for (let index = 1; index < sampleProjects.length; index += 1) {
+            const at = index - 1;
+            const previous = sampleProjects[index - 1];
+            const current = sampleProjects[index];
+            relay
+              .to(previous, { xPercent: -54, yPercent: -11, z: -260, rotateY: 4, scale: .64, autoAlpha: .1, force3D: true, ease: "none", duration: 1 }, at)
+              .to(current, { xPercent: 0, yPercent: 0, z: 65, rotateY: 0, scale: 1, autoAlpha: 1, force3D: true, ease: "none", duration: 1 }, at);
+            const next = sampleProjects[index + 1];
+            if (next) relay.to(next, { xPercent: 51, yPercent: index % 2 ? 5 : -5, z: -170, rotateY: -4, scale: .66, autoAlpha: .34, force3D: true, ease: "none", duration: .58 }, at + .3);
+          }
+        }
+        const independentlyAnimated = sampleRail && !isMobile
+          ? work.querySelectorAll<HTMLElement>(".pvh-project")
+          : work.querySelectorAll<HTMLElement>(".pvh-sample-project, .pvh-project");
+        independentlyAnimated.forEach((project, index) => {
           const visual = project.querySelector<HTMLElement>("figure, .pvh-project-visual");
           const copy = project.querySelector<HTMLElement>("div:last-child, .pvh-project-copy");
           const direction = index % 2 ? 1 : -1;
@@ -262,28 +285,88 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
 
       const gallery = root.querySelector<HTMLElement>(".pvh-gallery-stage");
       if (gallery) {
-        const factors = [.72, 1.05, 1.28, .86, 1.2, .68];
-        const endOffsets = [-92, -116, -138, -72, -24, 12];
-        gallery.querySelectorAll<HTMLElement>(".pvh-gallery-frame").forEach((frame, index) => {
-          const factor = factors[index] || 1;
-          gsap.fromTo(frame,
-            { y: (isMobile ? 55 : 170) * factor, z: isMobile ? 0 : (index % 3 === 0 ? -90 : 120), rotateZ: isMobile ? 0 : (index % 2 ? 2.4 : -2.4), scale: index % 2 ? .94 : 1.04 },
-            { y: isMobile ? -35 * factor : endOffsets[index] ?? -72, z: isMobile ? 0 : (index % 2 ? -35 : 75), rotateZ: isMobile ? 0 : (index % 2 ? -.7 : .7), scale: index % 2 ? 1.04 : .97, force3D: true, ease: "none", scrollTrigger: { trigger: gallery, start: "top 92%", end: "bottom 8%", scrub: isMobile ? .65 : 1.1 } });
-        });
+        const frames = gallery.querySelectorAll<HTMLElement>(".pvh-gallery-frame");
+        if (isMobile) {
+          frames.forEach((frame, index) => gsap.fromTo(frame,
+            { yPercent: 10 + index * 2, autoAlpha: .55, scale: .96 },
+            { yPercent: -4, autoAlpha: 1, scale: 1, ease: "none", scrollTrigger: { trigger: frame, start: "top 94%", end: "bottom 36%", scrub: .48 } }));
+        } else {
+          const galleryTimeline = gsap.timeline({ scrollTrigger: { trigger: gallery, start: "top 95%", end: "bottom 10%", scrub: 1.05 } });
+          const starts = [
+            { xPercent: -9, yPercent: 20, z: -80, scale: .93, autoAlpha: .86 },
+            { xPercent: 15, yPercent: 28, z: -150, scale: .88, autoAlpha: .62 },
+            { xPercent: 24, yPercent: 34, z: 180, scale: .86, autoAlpha: 0 },
+            { xPercent: -18, yPercent: 42, z: -120, scale: .88, autoAlpha: 0 },
+            { xPercent: -24, yPercent: 48, z: 220, scale: .82, autoAlpha: 0 },
+            { xPercent: 18, yPercent: 42, z: -220, scale: .82, autoAlpha: 0 },
+          ];
+          const ends = [
+            { xPercent: 1, yPercent: -9, z: 70, scale: 1.01, autoAlpha: 1 },
+            { xPercent: -4, yPercent: -14, z: 15, scale: 1, autoAlpha: 1 },
+            { xPercent: -7, yPercent: -18, z: 110, scale: 1.03, autoAlpha: 1 },
+            { xPercent: 6, yPercent: -10, z: -25, scale: 1, autoAlpha: 1 },
+            { xPercent: 8, yPercent: -5, z: 150, scale: 1.04, autoAlpha: 1 },
+            { xPercent: -5, yPercent: 1, z: -70, scale: .98, autoAlpha: .9 },
+          ];
+          frames.forEach((frame, index) => galleryTimeline.fromTo(frame, starts[index], { ...ends[index], rotateZ: index % 2 ? -.55 : .55, force3D: true, ease: "none", duration: .62 }, index < 2 ? 0 : .16 + (index - 2) * .17));
+          const capabilities = root.querySelector<HTMLElement>(".pvh-capabilities");
+          if (capabilities) gsap.to(gallery, { yPercent: -8, z: -170, scale: .96, autoAlpha: .58, force3D: true, ease: "none", scrollTrigger: { trigger: capabilities, start: "top bottom", end: "top 54%", scrub: .85 } });
+        }
+      }
+
+      const capabilitiesSection = root.querySelector<HTMLElement>(".pvh-capabilities");
+      if (capabilitiesSection) {
+        const stage = capabilitiesSection.querySelector<HTMLElement>(".pvh-capability-media");
+        const frames = capabilitiesSection.querySelectorAll<HTMLElement>(".pvh-capability-media figure");
+        const heading = capabilitiesSection.querySelector<HTMLElement>("h2");
+        const chips = capabilitiesSection.querySelectorAll<HTMLElement>(".pvh-chip-rail li");
+        const timeline = gsap.timeline({ scrollTrigger: { trigger: capabilitiesSection, start: "top 90%", end: "bottom 16%", scrub: isMobile ? .55 : .9 } });
+        timeline
+          .fromTo(heading, { xPercent: -7, autoAlpha: .45 }, { xPercent: 0, autoAlpha: 1, ease: "none", duration: .45 }, 0)
+          .fromTo(stage, { yPercent: 10, z: -120, scale: .93 }, { yPercent: -5, z: 55, scale: 1, force3D: true, ease: "none", duration: .82 }, 0);
+        const starts = [
+          { xPercent: 8, yPercent: 12, z: -120, scale: .94 },
+          { xPercent: -38, yPercent: -18, z: 210, scale: .86 },
+          { xPercent: 34, yPercent: 28, z: 260, scale: .82 },
+        ];
+        const ends = [
+          { xPercent: -2, yPercent: -7, z: 35, scale: 1.02 },
+          { xPercent: 6, yPercent: 4, z: 95, scale: 1 },
+          { xPercent: -5, yPercent: -10, z: 145, scale: 1.04 },
+        ];
+        frames.forEach((frame, index) => timeline.fromTo(frame, starts[index], { ...ends[index], force3D: true, ease: "none", duration: .74 }, .06 + index * .09));
+        timeline.fromTo(chips, { y: 18, autoAlpha: 1 }, { y: 0, autoAlpha: 1, stagger: .035, ease: "none", duration: .38 }, .26);
       }
 
       const why = root.querySelector<HTMLElement>(".pvh-why");
       if (why) {
         const title = why.querySelector<HTMLElement>("h2");
         const cards = why.querySelectorAll<HTMLElement>(".pvh-why-grid article");
+        const anchor = why.querySelector<HTMLElement>(".pvh-why-anchor");
+        const fragments = why.querySelectorAll<HTMLElement>(".pvh-trust-fragment");
         const signal = why.querySelector<HTMLElement>(".pvh-why-signal");
         const signalWord = why.querySelector<HTMLElement>(".pvh-why-signal strong");
-        const timeline = gsap.timeline({ scrollTrigger: { trigger: why, start: "top 86%", end: "bottom 18%", scrub: isMobile ? .55 : 1 } });
+        const timeline = gsap.timeline({ scrollTrigger: { trigger: why, start: "top 94%", end: "bottom 14%", scrub: isMobile ? .55 : .92 } });
         timeline
           .fromTo(title, { xPercent: -8, autoAlpha: .45 }, { xPercent: isMobile ? 0 : 4, autoAlpha: 1, ease: "none", duration: .55 }, 0)
-          .fromTo(cards, { y: isMobile ? 24 : 70, autoAlpha: .28 }, { y: 0, autoAlpha: 1, stagger: .11, ease: "none", duration: .62 }, .12)
+          .fromTo(anchor, { xPercent: isMobile ? 0 : 19, yPercent: 18, z: -160, scale: .9, autoAlpha: .42 }, { xPercent: 0, yPercent: -9, z: 65, scale: 1.02, autoAlpha: .78, force3D: true, ease: "none", duration: .78 }, 0)
+          .fromTo(cards, { y: isMobile ? 24 : 62, z: isMobile ? 0 : -80, autoAlpha: .3 }, { y: 0, z: 25, autoAlpha: 1, stagger: .09, force3D: true, ease: "none", duration: .6 }, .16)
+          .fromTo(fragments, { yPercent: 24, xPercent: isMobile ? 0 : -7, scale: 1.12 }, { yPercent: -8, xPercent: isMobile ? 0 : 4, scale: 1, stagger: .08, ease: "none", duration: .62 }, .18)
           .fromTo(signal, { clipPath: "inset(12% 8% 12% 8%)", z: -80 }, { clipPath: "inset(0% 0% 0% 0%)", z: 25, force3D: true, ease: "none", duration: .74 }, .28)
-          .fromTo(signalWord, { xPercent: -12, autoAlpha: .04 }, { xPercent: 5, autoAlpha: .18, ease: "none", duration: .72 }, .28);
+          .fromTo(signalWord, { xPercent: -12, autoAlpha: .04 }, { xPercent: 5, autoAlpha: .18, ease: "none", duration: .72 }, .28)
+          .to(anchor, { yPercent: -24, z: -120, scale: .94, autoAlpha: .38, force3D: true, ease: "none", duration: .24 }, .76);
+      }
+
+      const faq = root.querySelector<HTMLElement>(".pvh-faq");
+      if (faq) {
+        const faqMedia = faq.querySelector<HTMLElement>(".pvh-faq-media");
+        const faqTitle = faq.querySelector<HTMLElement>("h2");
+        const faqList = faq.querySelector<HTMLElement>(".pvh-faq-list");
+        const timeline = gsap.timeline({ scrollTrigger: { trigger: faq, start: "top 94%", end: "top 28%", scrub: isMobile ? .5 : .8 } });
+        timeline
+          .fromTo(faqMedia, { xPercent: isMobile ? 0 : 18, yPercent: 34, z: 150, scale: 1.09 }, { xPercent: 0, yPercent: 0, z: 0, scale: 1, force3D: true, ease: "none", duration: .78 }, 0)
+          .fromTo(faqTitle, { yPercent: 16, autoAlpha: .42 }, { yPercent: 0, autoAlpha: 1, ease: "none", duration: .54 }, .08)
+          .fromTo(faqList, { yPercent: 9, autoAlpha: .48 }, { yPercent: 0, autoAlpha: 1, ease: "none", duration: .6 }, .18);
       }
 
       const cta = root.querySelector<HTMLElement>(".pvh-cta");
@@ -321,7 +404,8 @@ export function useHomeMotion(rootRef: React.RefObject<HTMLElement | null>, opti
 
     return () => {
       alive = false;
-      cancelAnimationFrame(rafId);
+      gsap.ticker.remove(updateLenis);
+      gsap.ticker.lagSmoothing(500, 33);
       removePointerMotion();
       window.removeEventListener("resize", refresh);
       mediaNodes.forEach((node) => {

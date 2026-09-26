@@ -9,8 +9,8 @@ export function DemoPortfolio({ compact = false }: { compact?: boolean }) {
       <p>These unbranded sample concepts demonstrate how published work will be presented. They are not client projects, and the first published CMS projects replace this showcase automatically.</p>
     </header>
     <div className="demo-portfolio-grid">
-      {demoPortfolio.map((item) => <article key={item.title}>
-        <figure><CmsImage asset={item.asset} priority sizes="(max-width: 800px) 100vw, 55vw" /><span>{item.asset.sampleLabel}</span></figure>
+      {demoPortfolio.map((item) => <article key={item.title} data-public-reveal>
+        <figure><CmsImage asset={item.asset} sizes="(max-width: 800px) 100vw, 55vw" /><span>CONCEPT</span></figure>
         <div><small>{item.category} · {item.scope}</small><h3>{item.title}</h3><p>{item.summary}</p></div>
       </article>)}
     </div>

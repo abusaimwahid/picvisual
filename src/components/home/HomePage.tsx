@@ -184,13 +184,19 @@ export function HomePage({ content }: { content?: HomeContent }) {
   const heroMedia = resolveHeroMedia(hero, media);
   const galleryIds = (gallerySection?.mediaIds || []).filter((id) => media[id]).slice(0, 6);
   const gallerySource = galleryIds.length ? galleryIds.map((id) => media[id]) : [...demoGallery];
-  const proofRaw = proof?.rawMediaId && media[proof.rawMediaId] ? media[proof.rawMediaId] : demoMedia.beauty;
-  const proofRefined = proof?.finishedMediaId && media[proof.finishedMediaId] ? media[proof.finishedMediaId] : demoMedia.beauty;
+  const proofRaw = proof?.rawMediaId && media[proof.rawMediaId] ? media[proof.rawMediaId] : demoMedia.beautyRaw;
+  const proofRefined = proof?.finishedMediaId && media[proof.finishedMediaId] ? media[proof.finishedMediaId] : demoMedia.beautyDetail;
   const proofIsSample = !(proof?.rawMediaId && proof?.finishedMediaId && media[proof.rawMediaId] && media[proof.finishedMediaId]);
   const introAssets: PublicMedia[] = galleryIds.length
     ? galleryIds.slice(0, 3).map((id) => media[id])
-    : [demoMedia.beauty, demoMedia.jewelry, demoMedia.product];
-  const processAsset: PublicMedia = galleryIds.length > 3 ? media[galleryIds[3]] : demoMedia.motion;
+    : [demoMedia.beauty, demoMedia.productPolished, demoMedia.gemstone];
+  const processAsset: PublicMedia = galleryIds.length > 3 ? media[galleryIds[3]] : demoMedia.workstation;
+  const processSupport: PublicMedia[] = galleryIds.length > 5
+    ? [media[galleryIds[4]], media[galleryIds[5]]]
+    : [demoMedia.productSource, demoMedia.motionSequence];
+  const capabilityMedia: PublicMedia[] = galleryIds.length > 2
+    ? galleryIds.slice(0, 3).map((id) => media[id])
+    : [demoMedia.compositingLayers, demoMedia.productPolished, demoMedia.gemstone];
   const steps = workflow?.steps?.filter((step) => step.enabled !== false) ?? [
     { title: "Send" }, { title: "Prep" }, { title: "Finish" }, { title: "Quality check" }, { title: "Deliver" },
   ];
@@ -337,11 +343,18 @@ export function HomePage({ content }: { content?: HomeContent }) {
           <h2>{workflow?.heading || "Post-production built for modern visual teams."}</h2>
           <p>{workflow?.description || "A clear production path from brief to final delivery."}</p>
         </header>
-        <figure className="pvh-process-media has-media">
-          <MediaAsset asset={processAsset} />
-          {!galleryIds.length && <DemoCaption asset={processAsset as DemoAsset} />}
-          <figcaption><span>BRIEF</span><i /><span>DELIVERY</span></figcaption>
-        </figure>
+        <div className="pvh-process-composition has-media">
+          <figure className="pvh-process-media">
+            <MediaAsset asset={processAsset} />
+            {!galleryIds.length && <DemoCaption asset={processAsset as DemoAsset} />}
+            <figcaption><span>BRIEF</span><i /><span>DELIVERY</span></figcaption>
+          </figure>
+          {processSupport.map((asset, index) => (
+            <figure className={`pvh-process-support support-${index + 1}`} key={`${asset.publicUrl}-process`}>
+              <MediaAsset asset={asset} />
+            </figure>
+          ))}
+        </div>
         <ol className="pvh-process-rail">
           {steps.map((step, index) => (
             <li key={`${step.title}-${index}`}>
@@ -360,12 +373,11 @@ export function HomePage({ content }: { content?: HomeContent }) {
           <p>{capabilities?.description || "Image, motion and creative production—one coordinated system for a consistent visual standard."}</p>
         </header>
         <div className="pvh-service-experience">
-          <div className="pvh-service-rows" role="tablist" aria-label="Services">
+          <div className="pvh-service-rows" role="group" aria-label="Services">
             {selectedServices.map((service, index) => (
               <button
                 type="button"
-                role="tab"
-                aria-selected={activeService === index}
+                aria-pressed={activeService === index}
                 aria-controls={`service-visual-${index}`}
                 className={`pvh-service-row3d ${activeService === index ? "is-active" : ""}`}
                 key={service.id || service.title}
@@ -387,7 +399,6 @@ export function HomePage({ content }: { content?: HomeContent }) {
               return (
                 <figure
                   id={`service-visual-${index}`}
-                  role="tabpanel"
                   aria-hidden={activeService !== index}
                   className={`pvh-service-visual ${activeService === index ? "is-active" : ""}`}
                   key={`${service.id || service.title}-visual`}
@@ -409,11 +420,13 @@ export function HomePage({ content }: { content?: HomeContent }) {
         </header>
         {projectMode === "empty" ? (
           <div className="pvh-sample-projects">
-            {demoPortfolio.map((item, index) => <article className={`pvh-sample-project sample-${index + 1}`} key={item.title}>
-              <figure><CmsImage asset={item.asset} priority sizes="(max-width: 800px) 100vw, 55vw" /><DemoCaption asset={item.asset} /></figure>
-              <div><span>{item.category} · {item.scope}</span><h3>{item.title}</h3><p>{item.summary}</p></div>
-            </article>)}
-            <div className="pvh-sample-note"><p>{selectedWork?.description || "These sample concepts demonstrate the presentation system. Published CMS projects replace them automatically."}</p><Link className="pvh-text-link" href="/contact">Start a Project <i>↗</i></Link></div>
+            <div className="pvh-portfolio-stage">
+              {demoPortfolio.map((item, index) => <article className={`pvh-sample-project sample-${index + 1}`} key={item.title}>
+                <figure><CmsImage asset={item.asset} sizes="(max-width: 800px) 100vw, 68vw" /><DemoCaption asset={item.asset} /></figure>
+                <div><span>{String(index + 1).padStart(2, "0")} / {item.category} · {item.scope}</span><h3>{item.title}</h3><p>{item.summary}</p></div>
+              </article>)}
+              <div className="pvh-sample-note"><p>{selectedWork?.description || "These sample concepts demonstrate the presentation system. Published CMS projects replace them automatically."}</p><Link className="pvh-text-link" href="/contact">Start a Project <i>↗</i></Link></div>
+            </div>
           </div>
         ) : (
           <div className="pvh-projects">{projects.slice(0, 5).map((project, index) => <ProjectCard key={project.slug} project={project} index={index} />)}</div>
@@ -432,16 +445,27 @@ export function HomePage({ content }: { content?: HomeContent }) {
                 <MediaAsset asset={asset} />
               </figure>
             ))}
-            <strong className="pvh-gallery-mark" data-depth="0.1">PV</strong>
+            <strong className="pvh-gallery-mark" data-depth="0.1" aria-hidden="true">PV</strong>
           </div>
         </section>
 
       <section className="pvh-capabilities pvh-section" data-reveal>
-        <header>
-          <span className="pvh-index">CAPABILITIES</span>
-          <h2>Production breadth without noise.</h2>
-        </header>
-        <ul className="pvh-chip-rail">{capabilityChips.map((chip) => <li key={chip}>{chip}</li>)}</ul>
+        <div className="pvh-capabilities-layout">
+          <div>
+            <header>
+              <span className="pvh-index">CAPABILITIES</span>
+              <h2>Production breadth without noise.</h2>
+            </header>
+            <ul className="pvh-chip-rail">{capabilityChips.map((chip) => <li key={chip}>{chip}</li>)}</ul>
+          </div>
+          <div className="pvh-capability-media has-media">
+            {capabilityMedia.map((asset, index) => (
+              <figure className={`capability-frame-${index + 1}`} key={`${asset.publicUrl}-capability`}>
+                <MediaAsset asset={asset} />
+              </figure>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="pvh-why pvh-section" data-reveal>
@@ -450,9 +474,11 @@ export function HomePage({ content }: { content?: HomeContent }) {
           <h2>{why?.heading || "Built for visual production at scale."}</h2>
           {why?.description && <p>{why.description}</p>}
         </header>
+        <figure className="pvh-why-anchor" aria-hidden="true"><CmsImage asset={demoMedia.compositingLayers} sizes="(max-width: 800px) 92vw, 48vw" /></figure>
         <div className="pvh-why-grid">
           {reasons.map((item, index) => (
             <article key={`${item.title}-${index}`}>
+              <figure className="pvh-trust-fragment" aria-hidden="true"><CmsImage asset={[demoMedia.productMaterial, demoMedia.workstation, demoMedia.motionSequence][index % 3]} sizes="(max-width: 800px) 100vw, 32vw" /></figure>
               <span>{String(index + 1).padStart(2, "0")}</span>
               <h3>{item.title}</h3>
               <p>{item.description}</p>
@@ -461,6 +487,7 @@ export function HomePage({ content }: { content?: HomeContent }) {
         </div>
         <div className="pvh-why-signal" aria-hidden="true">
           <span>CONSISTENCY / EVERY ASSET</span><span>CAPACITY / WHEN NEEDED</span><span>DELIVERY / PRODUCTION READY</span>
+          <figure className="pvh-why-media" data-depth="0.08"><CmsImage asset={demoMedia.productMaterial} sizes="(max-width: 800px) 80vw, 36vw" /></figure>
           <strong>CONTROL<br />AT SCALE</strong><i />
         </div>
       </section>
@@ -470,6 +497,7 @@ export function HomePage({ content }: { content?: HomeContent }) {
           <header>
             <span className="pvh-index">FAQ</span>
             <h2>{faqCopy?.heading || "Good work starts clear."}</h2>
+            <figure className="pvh-faq-media"><CmsImage asset={demoMedia.motionSequence} sizes="(max-width: 800px) 100vw, 36vw" /></figure>
           </header>
           <div className="pvh-faq-list">
             {faqs.map(([question, answer], index) => (
@@ -485,6 +513,7 @@ export function HomePage({ content }: { content?: HomeContent }) {
       )}
 
       <section className="pvh-cta pvh-section" data-reveal>
+        <figure className="pvh-cta-media" data-depth="-0.06" aria-hidden="true"><CmsImage asset={demoMedia.compositingLayers} sizes="100vw" /></figure>
         <div>
           <span className="pvh-index">{cta?.eyebrow || "START A CONVERSATION"}</span>
           <h2>{cta?.heading || "Have content in production?"}</h2>

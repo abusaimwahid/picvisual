@@ -3,8 +3,10 @@ import { DM_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import "./admin-cms.css";
 import "./admin-homepage.css";
+import "./admin-workspace.css";
 import "./home-cms.css";
 import "./homepage.css";
+import "./public-inner.css";
 
 const body = DM_Sans({
   subsets: ["latin"],

@@ -16,7 +16,7 @@ export default async function AboutAdminPage() {
   if (!hasDatabaseUrl()) notFound();
   const [page, media, services] = await Promise.all([
     prisma.page.findUnique({ where: { slug: "about" }, include: { sections: { orderBy: { order: "asc" } }, revisions: { orderBy: { createdAt: "desc" }, take: 12, include: { author: { select: { name: true, email: true } } } } } }),
-    prisma.media.findMany({ select: { id: true, filename: true, publicUrl: true, mediaType: true, alt: true }, take: 120, orderBy: { createdAt: "desc" } }),
+    prisma.media.findMany({ select: { id: true, filename: true, publicUrl: true, mediaType: true, alt: true, caption: true, width: true, height: true }, take: 120, orderBy: { createdAt: "desc" } }),
     prisma.service.findMany({ where: { status: "PUBLISHED" }, orderBy: [{ featuredOrder: "asc" }, { title: "asc" }] }),
   ]);
   if (!page) notFound();

@@ -1,14 +1,9 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { ActionNotice } from "./ActionNotice";
 import type { AdminUser } from "@/lib/auth/auth";
-import { BrandLogo } from "@/components/ui/BrandLogo";
 import type { PublicBrandSettings } from "@/lib/brand/settings";
-
-const navigation = [
-  ["Dashboard", "/admin"], ["Your account", "/admin/account"], ["Homepage", "/admin/homepage"], ["Studio page", "/admin/pages/about"], ["Projects", "/admin/projects"], ["Case Studies", "/admin/case-studies"], ["Services", "/admin/services"], ["Media", "/admin/media"], ["Testimonials", "/admin/testimonials"], ["Clients", "/admin/clients"], ["FAQ", "/admin/faq"], ["Navigation", "/admin/navigation"], ["Enquiries", "/admin/enquiries"], ["Site settings", "/admin/settings"], ["Brand settings", "/admin/settings/branding"], ["Users", "/admin/users"],
-] as const;
+import { AdminWorkspaceShell } from "./AdminWorkspaceShell";
 
 export function AdminShell({ user, children, brand }: { user: AdminUser; children: React.ReactNode; brand?: PublicBrandSettings }) {
-  return <div className="admin-shell"><aside className="admin-sidebar"><Link href="/admin" className="admin-brand" aria-label="PicVisual CMS"><BrandLogo className="admin-logo-image" source={brand?.mainLogo} /><small>CMS</small></Link><nav aria-label="Admin navigation">{navigation.map(([label, href]) => <Link href={href} key={href}>{label}</Link>)}</nav><div className="admin-account"><span>{user.name || user.email}</span><small>{user.role.toLowerCase()}</small><form action="/api/admin/auth/logout" method="post"><button>Sign out ↗</button></form></div></aside><div className="admin-main"><header className="admin-topbar"><Link href="/" target="_blank">View public site ↗</Link><span>{user.email}</span></header><Suspense><ActionNotice /></Suspense>{children}</div></div>;
+  return <AdminWorkspaceShell user={user} brand={brand}><Suspense><ActionNotice /></Suspense>{children}</AdminWorkspaceShell>;
 }
