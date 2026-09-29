@@ -36,15 +36,15 @@ test("homepage renders explicit zero, single, and multi-project modes", () => {
   assert.match(empty, /data-project-mode="empty"/);
   assert.match(empty, /pvh-sample-projects/);
   assert.match(empty, /Sample concept/);
-  assert.equal((empty.match(/class="pvh-project"/g) ?? []).length, 0);
+  assert.equal((empty.match(/class="pvh-project pvh-work-item/g) ?? []).length, 0);
 
   const single = render([project(1)]);
   assert.match(single, /data-project-mode="single"/);
-  assert.equal((single.match(/class="pvh-project"/g) ?? []).length, 1);
+  assert.equal((single.match(/class="pvh-project pvh-work-item/g) ?? []).length, 1);
 
   const multi = render([project(1), project(2), project(3)]);
   assert.match(multi, /data-project-mode="multi"/);
-  assert.equal((multi.match(/class="pvh-project"/g) ?? []).length, 3);
+  assert.equal((multi.match(/class="pvh-project pvh-work-item/g) ?? []).length, 3);
 });
 
 test("homepage activates real media only for resolved CMS references", () => {
@@ -88,8 +88,8 @@ test("homepage supplies a labeled demo gallery and preserves configured service 
   assert.match(markup, /pvh-gallery/);
   assert.match(markup, /data-source="demo"/);
   assert.match(markup, /Sample visual/);
-  assert.match(markup, /pvh-service-row3d is-active/);
-  assert.match(markup, /pvh-service-visual-stage has-media/);
-  assert.match(markup, /pvh-service-visual is-active/);
+  assert.match(markup, /pvh-service-panels/);
+  assert.match(markup, /pvh-service-panel is-active/);
+  assert.match(markup, /aria-pressed="true"/);
   assert.match(markup, /url=%2Fqa%2Fservice\.jpg/);
 });

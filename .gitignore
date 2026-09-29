@@ -15,3 +15,6 @@ artifacts/
 
 .agents/
 skills-lock.json
+
+# Local visual reference only - do not commit
+reference/bzm-reference.mov

@@ -59,7 +59,7 @@ test("invalid or missing homepage CMS media cannot override the local hero and s
     page: { sections: [{ type: "hero", content: { primaryMediaId: "missing-image" } }] },
     media: { "missing-image": { publicUrl: "https://example.com/missing.jpg", alt: "Missing", mediaType: "IMAGE", width: 1200, height: 800 } },
   } }));
-  assert.match(markup, /hero-product\.jpg/);
+  assert.match(markup, /cinematic-film-frame\.jpg/);
   assert.match(markup, /beauty-detail-study\.jpg/);
   assert.match(markup, /data-media-mode="demo"/);
 });
