@@ -29,9 +29,16 @@ export const services: Service[] = [
   },
   {
     index: "03",
+    title: "Product & jewelry finishing",
+    shortTitle: "Product & jewelry",
+    description: "Precise cleanup, controlled reflections and consistent surfaces for products and jewelry that must withstand close inspection.",
+    items: ["Jewelry retouching", "Product cleanup", "Metal & gemstone detail", "Shadow construction", "Surface consistency", "Campaign finishing"],
+  },
+  {
+    index: "04",
     title: "Creative production",
-    shortTitle: "Creative production",
+    shortTitle: "Creative & CGI",
     description: "Compositing, product manipulation and campaign adaptations for briefs that need a controlled, coherent visual finish.",
-    items: ["Creative compositing", "Product manipulation", "Campaign adaptations", "AI-assisted production"],
+    items: ["Creative compositing", "Product manipulation", "Campaign adaptations", "AI-assisted production", "CGI finishing", "Format adaptation"],
   },
 ];

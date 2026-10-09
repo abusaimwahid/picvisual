@@ -36,6 +36,19 @@ export default async function ServicesPage() {
       })}
     </section>
 
-    <section className="services-cta" data-public-reveal><div><span className="eyebrow">START A CONVERSATION</span><h2>{copy.approachHeading || "Have a brief in hand?"}</h2><p>Share the visual brief, intended channels and delivery needs. We’ll help shape a clear post-production path.</p><Link className="button button-light" href="/contact">Start a Project <i>↗</i></Link></div><figure><CmsImage asset={demoMedia.workstation} sizes="(max-width: 800px) 100vw, 42vw" /><figcaption>CONCEPT / PRODUCTION WORKFLOW</figcaption></figure></section>
+    <section className="services-workflow" data-public-reveal>
+      <header><span className="eyebrow">HOW THE WORK MOVES</span><h2>One clear path from brief to final delivery.</h2><p>Every engagement is shaped around the asset, channel and delivery need—then kept visible from first review through final handoff.</p></header>
+      <ol>
+        <li><span>01</span><div><h3>Discover</h3><p>Align on the visual brief, references, formats and intended use.</p></div></li>
+        <li><span>02</span><div><h3>Prepare</h3><p>Organize source files, define the finish and confirm the review path.</p></div></li>
+        <li><span>03</span><div><h3>Refine</h3><p>Build the image or motion treatment with focused, trackable feedback.</p></div></li>
+        <li><span>04</span><div><h3>Deliver</h3><p>Export channel-ready masters and the agreed production variants.</p></div></li>
+      </ol>
+      <figure><CmsImage asset={demoMedia.workstation} sizes="(max-width: 800px) 100vw, 48vw" /><figcaption>CONCEPT / PRODUCTION WORKFLOW</figcaption></figure>
+    </section>
+
+    <section className="services-manifesto" data-public-reveal><span className="eyebrow">BUILT AROUND THE IMAGE</span><p>Precise enough for the hero frame. Consistent enough for the full campaign.</p></section>
+
+    <section className="services-cta" data-public-reveal><div><span className="eyebrow">START A CONVERSATION</span><h2>{copy.approachHeading || "Have a brief in hand?"}</h2><p>Share the visual brief, intended channels and delivery needs. We’ll help shape a clear post-production path.</p><Link className="button button-light" href="/contact">Start a Project <i>↗</i></Link></div><figure><CmsImage asset={demoMedia.productPolished} sizes="(max-width: 800px) 100vw, 42vw" /><figcaption>CONCEPT / FINISHED IMAGE</figcaption></figure></section>
   </main></SiteChrome>;
 }
